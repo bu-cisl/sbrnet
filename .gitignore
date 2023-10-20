@@ -166,3 +166,10 @@ messroom/
 .tiff
 .tif
 .png
+
+# SCC files
+*.qsub
+.log/
+
+# Notebooks for scratch work
+notebooks/
