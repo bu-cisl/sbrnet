@@ -1,11 +1,14 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+from torch import Tensor
 from config_loader import load_config
 
 config = load_config("config.yaml")
 
 SQRT2 = 1.414
+RSQRT2 = 1 / SQRT2 # NOTE: multiplication is faster than division for floats
 
 
 class SBRNet(nn.Module):
@@ -17,28 +20,36 @@ class SBRNet(nn.Module):
             self.view_synthesis_branch = ResNetCM2NetBlock()
 
 
+class ResConnection(nn.Sequential):
+    def forward(self, data: Tensor, scale = RSQRT2) -> Tensor:
+        return (super().forward(data) + data) * scale
+
 # ResNet backbone
-class ResBlock(nn.Module):
+class ResBlock(ResConnection):
     def __init__(self, channels=config["resnet_channels"]):
-        super(ResBlock, self).__init__()
-        self.channels = channels
 
-        self.conv1 = nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False)
-        nn.init.kaiming_normal_(self.conv1.weight, nonlinearity="relu")
-        self.bn1 = nn.BatchNorm2d(channels)
+        self.channels = channels # does this really need to be stored?
 
-        self.conv2 = nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False)
-        nn.init.kaiming_normal_(self.conv2.weight, nonlinearity="relu")
-        self.bn2 = nn.BatchNorm2d(channels)
+        # allocate conv layers
+        # NOTE: I would generally allow for the number of convs to be a parameter
+        #       personally I don't like the rigid nature of forcing only 2 convs
+        conv1 = nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False)
+        conv2 = nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False)
 
-    def forward(self, x1):
-        x1 = self.conv1(x1)
-        x1 = F.relu(self.bn1(x1), inplace=True)
-        x1 = self.conv2(x1)
-        return self.bn2(x1)
+        # initalize conv layers
+        for conv in [conv1, conv2]:
+            nn.init.kaiming_normal_(conv.weight, nonlinearity="relu")
+
+        super(ResBlock, self).__init__(
+            conv1,
+            nn.BatchNorm2d(channels),
+            nn.ReLU(True),
+            conv2,
+            nn.BatchNorm2d(channels),
+        )
 
 
-class ResNetCM2NetBlock(nn.Module):
+class ResNetCM2NetBlock(ResConnection):
     def __init__(self, inchannels: int, numblocks: int, outchannels: int = 48):
         """_summary_
 
@@ -47,34 +58,23 @@ class ResNetCM2NetBlock(nn.Module):
             numblocks (int): _description_
             outchannels (int, optional): _description_. Defaults to 48.
         """
-        super(ResNetCM2NetBlock, self).__init__()
-        self.inchannels = inchannels
+
+        conv1 = nn.Conv2d(inchannels, outchannels, kernel_size=3, padding=1)
+        conv2 = nn.Conv2d(outchannels, outchannels, kernel_size=3, padding=1)
+
+        # initalize conv layers
+        for conv in [conv1, conv2]:
+            nn.init.kaiming_normal_(conv.weight, nonlinearity="relu")
+
+        resblocks = [ResBlock() for i in range(numblocks)]
+
+        super(ResNetCM2NetBlock, self).__init__(
+            conv1, # no activation or batch norm?
+            *resblocks,
+            conv2 # no activation or batch norm?
+        )
+
+        # dont think this these are necessary to keep
+        self.inchannels  = inchannels
         self.outchannels = outchannels
-        self.numblocks = numblocks
-
-        self.conv1 = nn.Conv2d(inchannels, outchannels, kernel_size=3, padding=1)
-        nn.init.kaiming_normal_(self.conv1.weight, nonlinearity="relu")
-        self.resblocks = nn.ModuleList([ResBlock() for i in range(numblocks)])
-        self.conv2 = nn.Conv2d(outchannels, outchannels, kernel_size=3, padding=1)
-        nn.init.kaiming_normal_(self.conv2.weight, nonlinearity="relu")
-
-    def forward(self, x):
-        x0 = self.conv1(x)
-        x1 = torch.clone(x0)
-        for _, m in enumerate(self.resblocks):
-            x1 = (m(x1) + x1) / SQRT2  # short residual connection
-        x1 = (x1 + x0) / SQRT2  # long residual connection
-        return self.conv2(x1)
-
-
-# class ResNetCM2Net(nn.Module):
-#     def __init__(self, numBlocks, stackchannels=numViews, rfvchannels=24, outchannels=24):
-#         super(ResNetCM2Net, self).__init__()
-
-#         self.stackpath = CM2NetBlock(stackchannels, numblocks=numBlocks)
-#         self.rfvpath = CM2NetBlock(rfvchannels, numblocks=numBlocks)
-#         self.endconv = nn.Conv2d(outchannels*2, outchannels, kernel_size=3, padding=1)
-#         nn.init.kaiming_normal_(self.endconv.weight, nonlinearity='relu')
-
-#     def forward(self, stack, rfv):
-#         return self.endconv((self.stackpath(stack) + self.rfvpath(rfv)) / SQRT2) # branch fusion
+        self.numblocks   = numblocks
