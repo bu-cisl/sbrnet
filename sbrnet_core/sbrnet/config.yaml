@@ -1,5 +1,6 @@
 # training stuff
 dataset_path: "/projectnb/tianlabdl/jalido/sbrnet/data/training_data/dataset0/"
+train_split: 0.8
 batch_size: 8
 learning_rate: 0.001
 epochs: 20000

@@ -1,3 +1,5 @@
+from ast import Tuple
+from logging import config
 import torch
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
@@ -29,9 +31,7 @@ class Trainer:
         self.optimizer_name = config.get("optimizer", "adam")
         self.lr_scheduler_name = config.get("lr_scheduler", "cosine_annealing")
         self.criterion_name = config.get("loss_criterion", "bce_with_logits")
-
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
         self.scaler = (
             GradScaler() if self.use_amp else None
         )  # Initialize the scaler if using AMP
@@ -47,8 +47,29 @@ class Trainer:
             print(
                 f"Unknown loss criterion: {self.criterion_name}. Using BCEWithLogitsLoss."
             )
+        self.train_data_loader, self.val_data_loader = self.get_dataloaders()
 
-        complete_dataset: Dataset = CustomDataset(config["dataset_path"])
+    def get_dataloaders(self) -> Tuple[DataLoader, DataLoader]:
+        def split_dataset(dataset, split_ratio):
+            dataset_size = len(dataset)
+            train_size = int(split_ratio * dataset_size)
+            val_size = dataset_size - train_size
+            train_dataset, val_dataset = torch.utils.data.random_split(
+                dataset, [train_size, val_size]
+            )
+            return train_dataset, val_dataset
+
+        complete_dataset: Dataset = CustomDataset(self.config["dataset_path"])
+        split_ratio = self.config["train_split"]  # Adjust this ratio as needed
+        train_dataset, val_dataset = split_dataset(complete_dataset, split_ratio)
+
+        train_dataset = MySubset(train_dataset, is_val=False)
+        val_dataset = MySubset(val_dataset, is_val=True)
+
+        train_dataloader = DataLoader(train_dataset, config["batch_size"], shuffle=True)
+        val_dataloader = DataLoader(val_dataset, config["batch_size"], shuffle=True)
+
+        return train_dataloader, val_dataloader
 
     def set_random_seed(self):
         if self.random_seed is not None:
