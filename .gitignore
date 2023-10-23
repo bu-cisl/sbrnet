@@ -76,6 +76,7 @@ docs/_build/
 target/
 
 # Jupyter Notebook
+notebooks/
 .ipynb_checkpoints
 .ipynb
 
@@ -163,13 +164,9 @@ cython_debug/
 # Data
 data/
 messroom/
-.tiff
-.tif
-.png
+*.tiff
+*.tif
+*.png
 
-# SCC files
-*.qsub
+# Logs
 .log/
-
-# Notebooks for scratch work
-notebooks/
