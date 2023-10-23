@@ -17,7 +17,8 @@ class SBRNet(Module):
 
         # UNet backbone is deprecated
         if config["backbone"] == "resnet":
-            self.view_synthesis_branch: Module = ResNetCM2NetBlock()
+            self.view_synthesis_branch: Module = ResNetCM2NetBlock(config)
+            self.rfv_branch: Module = ResNetCM2NetBlock(config)
 
         self.init_convs()
 
