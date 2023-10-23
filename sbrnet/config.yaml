@@ -7,3 +7,7 @@ backbone: "resnet"
 resnet_channels: 48
 weight_initi: "he_normal"
 random_seed: 42
+optimizer: "adam"
+criterion_name: "bce_with_logits"
+
+num_gt_layers: 24

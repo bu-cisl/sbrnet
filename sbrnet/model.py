@@ -17,9 +17,18 @@ class SBRNet(Module):
 
         # UNet backbone is deprecated
         if config["backbone"] == "resnet":
-            self.view_synthesis_branch: Module = ResNetCM2NetBlock(config)
+            self.view_synthesis_branch: Module = ResNetCM2NetBlock(config, "")
             self.rfv_branch: Module = ResNetCM2NetBlock(config)
-
+        else:
+            raise ValueError(
+                f"Unknown backbone: {config['backbone']}. Only 'resnet' is supported."
+            )
+        self.end_conv: Module = nn.Conv2d(
+            config.get("num_gt_layers") * 2,
+            config.get("num_gt_layers"),
+            kernel_size=3,
+            padding=1,
+        )
         self.init_convs()
 
     def init_convs(self) -> None:
@@ -30,6 +39,9 @@ class SBRNet(Module):
         # initializes all Conv2d
         self.view_synthesis_branch.apply(init_fn)
 
+    def forward(self, lf_view_stack: Tensor, rfv: Tensor) -> Tensor:
+        return self.view_synthesis_branch(lf_view_stack) + self.rfv_branch(rfv)
+
 
 class ResConnection(Sequential):
     def forward(self, data: Tensor, scale: float = RSQRT2) -> Tensor:
@@ -38,7 +50,7 @@ class ResConnection(Sequential):
 
 # ResNet backbone
 class ResBlock(ResConnection):
-    def __init__(self, channels: int = config["resnet_channels"]) -> None:
+    def __init__(self, channels: int) -> None:
         super(ResBlock, self).__init__(
             nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(channels),
@@ -49,21 +61,20 @@ class ResBlock(ResConnection):
 
 
 class ResNetCM2NetBlock(ResConnection):
-    def __init__(self, inchannels: int, numblocks: int, outchannels: int = 48) -> None:
-        """_summary_
+    def __init__(self, config, branch: str) -> None:
+        if branch == "view_synthesis":
+            inchannels = config["num_lf_views"]
+        elif branch == "refinement":
+            inchannels = config["num_rfv_layers"]
+        else:
+            raise ValueError(
+                f"Unknown branch: {branch}. Only 'view_synthesis' and 'refinement' are supported."
+            )
 
-        Args:
-            inchannels (int): depends on the branch. if view synthesis branch, equals the number of views. if rfv branch, equals the number of slices in the volume.
-            numblocks (int): _description_
-            outchannels (int, optional): _description_. Defaults to 48.
-        """
-
+        numblocks = config["num_resblocks"]
+        outchannels = config["num_gt_layers"]
         super(ResNetCM2NetBlock, self).__init__(
-            nn.Conv2d(
-                inchannels, outchannels, kernel_size=3, padding=1
-            ),  # no activation or batch norm?
-            *(ResBlock() for i in range(numblocks)),
-            nn.Conv2d(
-                outchannels, outchannels, kernel_size=3, padding=1
-            )  # no activation or batch norm?
+            nn.Conv2d(inchannels, outchannels, kernel_size=3, padding=1),
+            *(ResBlock(channels=outchannels * 2) for i in range(numblocks)),
+            nn.Conv2d(outchannels, outchannels, kernel_size=3, padding=1),
         )
