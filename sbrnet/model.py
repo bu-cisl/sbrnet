@@ -37,7 +37,7 @@ class SBRNet(Module):
                 nn.init.kaiming_normal_(mod.weight, nonlinearity="relu")
 
         # initializes all Conv2d
-        self.view_synthesis_branch.apply(init_fn)
+        self.apply(init_fn)
 
     def forward(self, lf_view_stack: Tensor, rfv: Tensor) -> Tensor:
         return self.view_synthesis_branch(lf_view_stack) + self.rfv_branch(rfv)
@@ -50,11 +50,22 @@ class ResConnection(Sequential):
 
 # ResNet backbone
 class ResBlock(ResConnection):
-    def __init__(self, channels: int) -> None:
+    def __init__(self, channels: int, convs: int = 2) -> None:
+
+        if not isinstance(convs, int):
+            raise ValueError(f'convs only supports type `int`, but found type `{type(convs)}`')
+        elif conv < 1:
+            raise ValueError(f'convs must be >= 1 but got {convs}')
+
         super(ResBlock, self).__init__(
-            nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(channels),
-            nn.ReLU(True),
+            *sum([
+                [
+                    nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False),
+                    nn.BatchNorm2d(channels),
+                    nn.ReLU(True)
+                ]
+                for _ in range(convs)
+            ]),
             nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(channels),
         )
