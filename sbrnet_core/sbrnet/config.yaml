@@ -1,0 +1,18 @@
+# training stuff
+dataset_path: "/projectnb/tianlabdl/jalido/sbrnet/data/training_data/dataset0/"
+batch_size: 8
+learning_rate: 0.001
+epochs: 20000
+model_save_path: "/projectnb/tianlabdl/jalido/sbrnet/models/"
+backbone: "resnet"
+resnet_channels: 48
+weight_initi: "he_normal"
+random_seed: 42
+optimizer: "adam"
+criterion_name: "bce_with_logits"
+
+# model stuff
+num_gt_layers: 24
+num_lf_views: 9
+num_rfv_layers: 24
+num_resblocks: 20
