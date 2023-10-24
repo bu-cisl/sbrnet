@@ -48,7 +48,14 @@ class CustomDataset(Dataset):
 
 
 class MySubset(Dataset):
-    def __init__(self, dataset, is_val):
+    def __init__(self, dataset: Dataset, is_val: bool):
+        """Dataset class to include Poisson-Gaussian noise.
+
+        Args:
+            dataset (Dataset): the complete clean dataset
+            is_val (boolean): if true, the dataset is for validation, else for training.
+                              for validation, do not do any cropping
+        """
         self.dataset = dataset
         self.is_val = is_val
 
@@ -77,20 +84,3 @@ class MySubset(Dataset):
 
     def __len__(self):
         return len(self.dataset)
-
-
-# def split_dataset(dataset, split_ratio):
-#     dataset_size = len(dataset)
-#     train_size = int(split_ratio * dataset_size)
-#     val_size = dataset_size - train_size
-#     train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
-#     return train_dataset, val_dataset
-
-# d_traindata = './training_data/dataset11/'
-
-# completedataset = CustomDataset(d_traindata)
-# split_ratio = 0.8  # Adjust this ratio as needed
-# train_dataset, val_dataset = split_dataset(completedataset, split_ratio)
-
-# train_dataset = MySubset(train_dataset, is_val=False)
-# val_dataset = MySubset(val_dataset, is_val=True)
