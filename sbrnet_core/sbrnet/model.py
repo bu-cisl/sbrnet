@@ -46,6 +46,7 @@ class SBRNet(Module):
 
         # initializes all Conv2d
         self.view_synthesis_branch.apply(init_fn)
+        self.rfv_branch.apply(init_fn)
 
     def forward(self, lf_view_stack: Tensor, rfv: Tensor) -> Tensor:
         return self.end_conv(
@@ -87,6 +88,6 @@ class ResNetCM2NetBlock(Sequential):
             nn.Conv2d(inchannels, outchannels * 2, kernel_size=3, padding=1),
             ResConnection(
                 *(ResBlock(channels=outchannels * 2) for _ in range(numblocks)),
-                nn.Conv2d(outchannels * 2, outchannels * 2, kernel_size=3, padding=1),
             ),
+            nn.Conv2d(outchannels * 2, outchannels * 2, kernel_size=3, padding=1),
         )
