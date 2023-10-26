@@ -162,7 +162,7 @@ cython_debug/
 #.idea/
 
 # Data
-sbrnet_core/data/
+data/
 messroom/
 *.tiff
 *.tif
@@ -173,3 +173,7 @@ messroom/
 
 # SCC stuff
 *.qsub
+
+.venv/
+.direnv/
+.vscode/

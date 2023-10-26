@@ -1,20 +1,25 @@
 import logging
+import argparse
+from datetime import datetime  # Import datetime module
 
 from sbrnet_core.sbrnet.model import SBRNet
-from sbrnet_core.sbrnet.config_loader import load_config
-
-# from sbrnet_core.sbrnet.dataset import DataLoader
-from sbrnet_core.sbrnet.model import SBRNet
+from sbrnet_core.config_loader import load_config
 from sbrnet_core.sbrnet.trainer import Trainer
 
-# Configure logging to write log messages to a file
-log_file_path = "my_log_file.log"
+# Get the current timestamp as a string
+current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+# Define the log file path with the timestamp
+log_file_path = f"/projectnb/tianlabdl/jalido/sbrnet_proj/.log/logging/sbrnet_train_{current_time}.log"
+
+# Configure logging to write log messages to the file
 logging.basicConfig(filename=log_file_path, level=logging.DEBUG)
 
 logger = logging.getLogger(__name__)
 
-if __name__ == "__main__":
-    config = load_config("config.yaml")
+
+def main(config_file):
+    config = load_config(config_file)
 
     model = SBRNet(config)
 
@@ -25,3 +30,14 @@ if __name__ == "__main__":
     trainer.train()
 
     logger.info("Training complete.")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Train SBRNet using a config file.")
+    parser.add_argument(
+        "config_file", help="Path to the config file (e.g., config.yaml)"
+    )
+
+    args = parser.parse_args()
+
+    main(args.config_file)
