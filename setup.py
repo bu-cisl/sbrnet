@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
     name="sbrnet_core",
     version="0.1",
-    packages=find_packages("sbrnet_core"),
+    packages=find_packages(),
     install_requires=[],
     author="Jeffrey Alido",
     author_email="jalido@bu.edu",
