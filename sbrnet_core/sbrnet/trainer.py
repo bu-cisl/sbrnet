@@ -2,15 +2,22 @@ import torch
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 import torch.nn as nn
+from torch.nn import Module
+from torch.utils.data import DataLoader, Dataset
 import time
 from torch.cuda.amp import GradScaler, autocast
 
+from sbrnet_core.sbrnet.dataset import CustomDataset, MySubset
+
 
 class Trainer:
-    def __init__(self, model, data_loader, config):
+    def __init__(
+        self,
+        model: Module,
+        config,
+    ):
         self.config = config
         self.model = model
-        self.data_loader = data_loader
         self.learning_rate = config["learning_rate"]
         self.epochs = config["epochs"]
         self.model_save_path = config["model_save_path"]
@@ -40,6 +47,8 @@ class Trainer:
             print(
                 f"Unknown loss criterion: {self.criterion_name}. Using BCEWithLogitsLoss."
             )
+
+        complete_dataset: Dataset = CustomDataset(config["dataset_path"])
 
     def set_random_seed(self):
         if self.random_seed is not None:
@@ -95,7 +104,7 @@ class Trainer:
             self.model.to(self.device)
             self.model.train()
             total_loss = 0
-            for lf_view_stack, rfv, gt in self.data_loader:
+            for lf_view_stack, rfv, gt in self.train_data_loader:
                 lf_view_stack, rfv, gt = (
                     lf_view_stack.to(self.device),
                     rfv.to(self.device),
@@ -119,7 +128,7 @@ class Trainer:
 
                 total_loss += loss.item()
 
-            avg_train_loss = total_loss / len(self.data_loader)
+            avg_train_loss = total_loss / len(self.train_data_loader)
             self.training_losses.append(avg_train_loss)
             print(f"Epoch [{epoch + 1}/{self.epochs}], Train Loss: {avg_train_loss}")
 
@@ -150,7 +159,7 @@ class Trainer:
         self.model.eval()
         total_loss = 0
         with torch.no_grad():
-            for lf_view_stack, rfv, gt in self.data_loader:
+            for lf_view_stack, rfv, gt in self.val_data_loader:
                 lf_view_stack, rfv, gt = (
                     lf_view_stack.to(self.device),
                     rfv.to(self.device),
@@ -159,4 +168,4 @@ class Trainer:
                 output = self.model(lf_view_stack, rfv)
                 loss = self.criterion(output, gt)
                 total_loss += loss.item()
-        return total_loss / len(self.data_loader)
+        return total_loss / len(self.val_data_loader)
