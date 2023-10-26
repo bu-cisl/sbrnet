@@ -47,6 +47,18 @@ def uint8_to_float(x: np.ndarray) -> np.ndarray:
     return x_float
 
 
+def full_read_tiff(data_path: str) -> np.ndarray:
+    """read and normalize tiff files
+
+    Args:
+        data_path (str): path to file
+
+    Returns:
+        np.ndarray: numpy array of tiff file
+    """
+    return uint8_to_float(read_tiff(data_path))
+
+
 def full_read(data_path: str) -> np.ndarray:
     """combines reading and normalizing
 
