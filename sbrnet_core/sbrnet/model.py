@@ -6,19 +6,19 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch.nn import Module, Conv2d, Sequential
 
-RSQRT2 = torch.sqrt(
-    0.5
-).item()  # NOTE: multiplication is faster than division for floats
+RSQRT2 = torch.sqrt(torch.tensor(0.5)).item()
 
 
 class SBRNet(Module):
     def __init__(self, config) -> None:
-        super(SBRNet, self).__init__()
+        super().__init__()
+        self.config = config
 
         # UNet backbone is deprecated
         if config["backbone"] == "resnet":
-            self.view_synthesis_branch: Module = ResNetCM2NetBlock(config, "")
-            self.rfv_branch: Module = ResNetCM2NetBlock(config)
+            self.view_synthesis_branch = ResNetCM2NetBlock(config, "view_synthesis")
+
+            self.rfv_branch = ResNetCM2NetBlock(config, "refinement")
         else:
             raise ValueError(
                 f"Unknown backbone: {config['backbone']}. Only 'resnet' is supported."
@@ -34,13 +34,23 @@ class SBRNet(Module):
     def init_convs(self) -> None:
         def init_fn(mod: Module) -> None:
             if isinstance(mod, Conv2d):
-                nn.init.kaiming_normal_(mod.weight, nonlinearity="relu")
+                weight_init = self.config.get("weight_init", "kaiming_normal")
+                if weight_init == "kaiming_normal":
+                    nn.init.kaiming_normal_(mod.weight, nonlinearity="relu")
+                elif weight_init == "xavier_normal":
+                    nn.init.xavier_normal_(mod.weight)
+                else:
+                    raise ValueError(
+                        f"Unsupported weight initialization method: {weight_init}"
+                    )
 
         # initializes all Conv2d
         self.view_synthesis_branch.apply(init_fn)
 
     def forward(self, lf_view_stack: Tensor, rfv: Tensor) -> Tensor:
-        return self.view_synthesis_branch(lf_view_stack) + self.rfv_branch(rfv)
+        return self.end_conv(
+            (self.view_synthesis_branch(lf_view_stack) + self.rfv_branch(rfv)) * RSQRT2
+        )
 
 
 class ResConnection(Sequential):
@@ -60,7 +70,7 @@ class ResBlock(ResConnection):
         )
 
 
-class ResNetCM2NetBlock(ResConnection):
+class ResNetCM2NetBlock(Sequential):
     def __init__(self, config, branch: str) -> None:
         if branch == "view_synthesis":
             inchannels = config["num_lf_views"]
@@ -74,7 +84,9 @@ class ResNetCM2NetBlock(ResConnection):
         numblocks = config["num_resblocks"]
         outchannels = config["num_gt_layers"]
         super(ResNetCM2NetBlock, self).__init__(
-            nn.Conv2d(inchannels, outchannels, kernel_size=3, padding=1),
-            *(ResBlock(channels=outchannels * 2) for i in range(numblocks)),
-            nn.Conv2d(outchannels, outchannels, kernel_size=3, padding=1),
+            nn.Conv2d(inchannels, outchannels * 2, kernel_size=3, padding=1),
+            ResConnection(
+                *(ResBlock(channels=outchannels * 2) for _ in range(numblocks)),
+                nn.Conv2d(outchannels * 2, outchannels * 2, kernel_size=3, padding=1),
+            ),
         )

@@ -1,5 +1,6 @@
-from ast import Tuple
-from logging import config
+import logging
+from typing import Tuple
+from venv import logger
 import torch
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
@@ -11,6 +12,7 @@ from torch.cuda.amp import GradScaler, autocast
 
 from sbrnet_core.sbrnet.dataset import CustomDataset, MySubset
 
+logger = logging.getLogger(__name__)
 
 class Trainer:
     def __init__(
@@ -32,6 +34,7 @@ class Trainer:
         self.lr_scheduler_name = config.get("lr_scheduler", "cosine_annealing")
         self.criterion_name = config.get("loss_criterion", "bce_with_logits")
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        logger.debug(f"Using device: {self.device}")
         self.scaler = (
             GradScaler() if self.use_amp else None
         )  # Initialize the scaler if using AMP
@@ -66,8 +69,12 @@ class Trainer:
         train_dataset = MySubset(train_dataset, is_val=False)
         val_dataset = MySubset(val_dataset, is_val=True)
 
-        train_dataloader = DataLoader(train_dataset, config["batch_size"], shuffle=True)
-        val_dataloader = DataLoader(val_dataset, config["batch_size"], shuffle=True)
+        train_dataloader = DataLoader(
+            train_dataset, self.config.get("batch_size"), shuffle=True
+        )
+        val_dataloader = DataLoader(
+            val_dataset, self.config["batch_size"], shuffle=True
+        )
 
         return train_dataloader, val_dataloader
 
@@ -151,11 +158,11 @@ class Trainer:
 
             avg_train_loss = total_loss / len(self.train_data_loader)
             self.training_losses.append(avg_train_loss)
-            print(f"Epoch [{epoch + 1}/{self.epochs}], Train Loss: {avg_train_loss}")
+            logger.debug(f"Epoch [{epoch + 1}/{self.epochs}], Train Loss: {avg_train_loss}")
 
             val_loss = self.validate()
             self.validation_losses.append(val_loss)
-            print(f"Epoch [{epoch + 1}/{self.epochs}], Validation Loss: {val_loss}")
+            logger.debug(f"Epoch [{epoch + 1}/{self.epochs}], Validation Loss: {val_loss}")
 
             if self.lr_scheduler_name == "plateau":
                 scheduler.step(
@@ -174,7 +181,9 @@ class Trainer:
                     "validation_losses": self.validation_losses,
                     "time_elapsed": time.time() - start_time,
                 }
+                save_state.update(self.config)
                 torch.save(save_state, self.model_save_path)
+                logger.info("Model saved at epoch {}".format(epoch + 1))
 
     def validate(self):
         self.model.eval()

@@ -2,9 +2,11 @@ import os
 import torch
 import numpy as np
 from torch.utils.data import Dataset
-from skimage import io
+from tifffile import imread
 
-from sbrnet_core.utils.utils import full_read_tiff
+# import skimage.io as io
+# from tifffile import imread
+
 
 # calibrated parameters for poisson gaussian noise model
 # cite
@@ -12,8 +14,6 @@ A_STD = 5.7092e-5
 A_MEAN = 1.49e-4
 B_STD = 2.7754e-6
 B_MEAN = 5.41e-6
-
-print("here")
 
 
 class CustomDataset(Dataset):
@@ -32,16 +32,23 @@ class CustomDataset(Dataset):
         )
 
     def __getitem__(self, index):
-        stack = io.imread(os.path.join(self.directory, f"stackbg/meas_{index}.tiff"))
-        stack = (stack - stack.min()) / (stack.max() - stack.min()).astype(np.int16)
+        stack = imread(
+            os.path.join(self.directory, f"stackbg/meas_{index}.tiff")
+        ).astype(np.float32)
+        stack = (stack - stack.min()) / (stack.max() - stack.min())
         stack = torch.from_numpy(stack)
 
-        rfv = io.imread(os.path.join(self.directory, f"rfvbg/meas_{index}.tiff"))
-        rfv = (rfv - rfv.min()) / (rfv.max() - rfv.min()).astype(np.int16)
+        rfv = imread(os.path.join(self.directory, f"rfvbg/meas_{index}.tiff")).astype(
+            np.float32
+        )
+
+        rfv = (rfv - rfv.min()) / (rfv.max() - rfv.min())
         rfv = torch.from_numpy(rfv)
 
-        gt = io.imread(os.path.join(self.directory, f"gt/gt_vol_{index}.tiff"))
-        gt = (gt - gt.min()) / (gt.max() - gt.min()).astype(np.int16)
+        gt = imread(os.path.join(self.directory, f"gt/gt_vol_{index}.tiff")).astype(
+            np.float32
+        )
+        gt = (gt - gt.min()) / (gt.max() - gt.min())
         gt = torch.from_numpy(gt)
 
         return stack, rfv, gt
@@ -66,7 +73,7 @@ class MySubset(Dataset):
         bb = torch.randn(1) * B_STD + B_MEAN
 
         if self.is_val:
-            stack, rfv, gt = self.dataset.__getitem__(idx)
+            stack, rfv, gt = self.dataset[idx]
             stack += torch.sqrt(aa * stack + bb) * torch.randn(stack.shape)
             rfv += torch.sqrt(aa * rfv + bb) * torch.randn(rfv.shape) / 3
             return stack, rfv, gt
@@ -84,3 +91,55 @@ class MySubset(Dataset):
 
     def __len__(self):
         return len(self.dataset)
+
+
+class ValidationDataset(Dataset):
+    def __init__(self, folder) -> None:
+        super(ValidationDataset).__init__()
+        self.directory = folder
+        stack_folder = os.path.join(self.directory, "stackbg")
+        rfv_folder = os.path.join(self.directory, "rfvbg")
+        gt_folder = os.path.join(self.directory, "gt")
+
+        # Get the number of files in each folder
+        stack_files = os.listdir(stack_folder)
+        rfv_files = os.listdir(rfv_folder)
+        gt_files = os.listdir(gt_folder)
+
+        # Ensure all folders have the same number of files
+        assert (
+            len(stack_files) == len(rfv_files) == len(gt_files)
+        ), "Not all folders have the same number of files."
+
+        # You can also print the counts if needed
+        print(f"stackbg folder has {len(stack_files)} files.")
+        print(f"rfvbg folder has {len(rfv_files)} files.")
+        print(f"gt folder has {len(gt_files)} files")
+
+    def __len__(self) -> int:
+        data_dir = os.path.join(self.directory, "rfvbg")  # bg refers to with background
+        return sum(1 for entry in os.scandir(data_dir) if entry.is_file())
+
+    def __getitem__(self, index):
+        stack = torch.from_numpy(
+            imread(os.path.join(self.directory, f"stackbg/meas_{index}.tiff")).astype(
+                np.float32
+            )
+            / 255
+        )
+
+        rfv = torch.from_numpy(
+            imread(os.path.join(self.directory, f"rfvbg/meas_{index}.tiff")).astype(
+                np.float32
+            )
+            / 255
+        )
+
+        gt = torch.from_numpy(
+            imread(os.path.join(self.directory, f"gt/gt_vol_{index}.tiff")).astype(
+                np.float32
+            )
+            / 255
+        )
+
+        return stack, rfv, gt
