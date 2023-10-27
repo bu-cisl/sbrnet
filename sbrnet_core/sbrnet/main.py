@@ -9,6 +9,7 @@ from sbrnet_core.sbrnet.trainer import Trainer
 ### use only in SCC interactive mode
 import os
 
+# go to powershell and do nvidia-smi to see which GPU you are assigned
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 ###
 
