@@ -7,16 +7,24 @@ import time
 low_sbr = 1.1
 high_sbr = 3.0
 
-psf_path = "/projectnb/tianlabdl/jalido/sbrnet/data/cm2v2/z_uninterpolated_PSF.tif"
+# TODO: need to make config file for all file paths so they're not hard-coded
+psf_path = "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/cm2v2/z_uninterpolated_PSF.tif"
 PSF = utils.normalize_psf_power(utils.full_read(psf_path))
-gt_folder = "/projectnb/tianlabdl/jalido/sbrnet/data/datap5vasc/"
+gt_folder = (
+    "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/synthetic_vasculature/beads/"
+)
 
-lens_apodize_path = "/projectnb/tianlabdl/jalido/sbrnet/data/cm2v2/lensletapodize.tiff"
+lens_apodize_path = (
+    "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/cm2v2/lensletapodize.tiff"
+)
 LENS_AP = utils.full_read(lens_apodize_path)
-mla_apodize_path = "/projectnb/tianlabdl/jalido/sbrnet/data/cm2v2/mlaapodize.tiff"
+mla_apodize_path = (
+    "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/cm2v2/mlaapodize.tiff"
+)
 MLA_AP = utils.full_read(mla_apodize_path)
 
-out_folder = "/projectnb/tianlabdl/jalido/sbrnet/data/training_data/dataset0/"
+# for nicholas to change to his own folder in projectnb
+out_folder = "/ad/eng/research/eng_research_cisl/"
 out_stack_folder = os.path.join(out_folder, "stack")
 out_rfv_folder = os.path.join(out_folder, "rfv")
 if not os.path.exists(out_folder):
@@ -32,7 +40,7 @@ for i in range(500):
     gt_path = os.path.join(gt_folder, f"gt_vol_{i}.tiff")
     gt = utils.full_read(gt_path)
 
-    value_path = f"/projectnb/tianlabdl/jalido/sbrnet/data/valuenoise/value_{i+1}.png"
+    value_path = f"/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/valuenoise/value_{i+1}.png"
     value = utils.full_read(value_path)
 
     fs_meas = utils.lsi_fwd_mdl(utils.pad_3d_array_to_size(gt, PSF.shape), PSF)
@@ -65,4 +73,3 @@ for i in range(500):
     df = pd.concat([df, rowdata], ignore_index=True, axis=0)
 
 df.to_parquet(out_folder + "metadata.pq")
-print("sequential", time.time() - t0)

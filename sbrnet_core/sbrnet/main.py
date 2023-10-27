@@ -6,6 +6,12 @@ from sbrnet_core.sbrnet.model import SBRNet
 from sbrnet_core.config_loader import load_config
 from sbrnet_core.sbrnet.trainer import Trainer
 
+### use only in SCC interactive mode
+import os
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+###
+
 # Get the current timestamp as a string
 current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
