@@ -10,9 +10,18 @@ from torch.utils.data import DataLoader, Dataset
 import time
 from torch.cuda.amp import GradScaler, autocast
 
+## for debugging
+torch.cuda.empty_cache()
+import os
+
+os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+os.environ["TORCH_USE_CUDA_DSA"] = "1"
+##
+
 from sbrnet_core.sbrnet.dataset import CustomDataset, MySubset
 
 logger = logging.getLogger(__name__)
+
 
 class Trainer:
     def __init__(
@@ -123,7 +132,7 @@ class Trainer:
 
         optimizer = self.initialize_optimizer()
         scheduler = self.initialize_lr_scheduler(optimizer)
-        start_time = time.time
+        start_time = time.time()
 
         if self.use_amp:
             print("Using mixed-precision training with AMP.")
@@ -158,11 +167,15 @@ class Trainer:
 
             avg_train_loss = total_loss / len(self.train_data_loader)
             self.training_losses.append(avg_train_loss)
-            logger.debug(f"Epoch [{epoch + 1}/{self.epochs}], Train Loss: {avg_train_loss}")
+            logger.debug(
+                f"Epoch [{epoch + 1}/{self.epochs}], Train Loss: {avg_train_loss}"
+            )
 
             val_loss = self.validate()
             self.validation_losses.append(val_loss)
-            logger.debug(f"Epoch [{epoch + 1}/{self.epochs}], Validation Loss: {val_loss}")
+            logger.debug(
+                f"Epoch [{epoch + 1}/{self.epochs}], Validation Loss: {val_loss}"
+            )
 
             if self.lr_scheduler_name == "plateau":
                 scheduler.step(
