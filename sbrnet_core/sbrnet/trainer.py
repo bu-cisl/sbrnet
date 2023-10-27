@@ -1,3 +1,4 @@
+import os
 import logging
 from typing import Tuple
 from venv import logger
@@ -9,13 +10,18 @@ from torch.nn import Module
 from torch.utils.data import DataLoader, Dataset
 import time
 from torch.cuda.amp import GradScaler, autocast
+import datetime
+
+now = datetime.datetime.now()
+
+timestamp = now.strftime("%Y-%m-%d_%H-%M-%S")
 
 ## for debugging
-torch.cuda.empty_cache()
-import os
+# torch.cuda.empty_cache()
+# import os
 
-os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
-os.environ["TORCH_USE_CUDA_DSA"] = "1"
+# os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+# os.environ["TORCH_USE_CUDA_DSA"] = "1"
 ##
 
 from sbrnet_core.sbrnet.dataset import CustomDataset, MySubset
@@ -33,7 +39,7 @@ class Trainer:
         self.model = model
         self.learning_rate = config["learning_rate"]
         self.epochs = config["epochs"]
-        self.model_save_path = config["model_save_path"]
+        self.model_dir = config["model_dir"]
         self.lowest_val_loss = float("inf")
         self.training_losses = []
         self.validation_losses = []
@@ -43,6 +49,10 @@ class Trainer:
         self.lr_scheduler_name = config.get("lr_scheduler", "cosine_annealing")
         self.criterion_name = config.get("loss_criterion", "bce_with_logits")
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        if not os.path.exists(self.model_dir):
+            os.makedirs(self.model_dir)
+
         logger.debug(f"Using device: {self.device}")
         self.scaler = (
             GradScaler() if self.use_amp else None
@@ -131,6 +141,7 @@ class Trainer:
         return scheduler
 
     def train(self):
+        model_name = f"sbrnet_{timestamp}.pt"
         self.set_random_seed()
 
         optimizer = self.initialize_optimizer()
@@ -165,18 +176,19 @@ class Trainer:
                     loss = self.criterion(output, gt)
                     loss.backward()
                     optimizer.step()
+                logger.debug(f"Epoch [{epoch + 1}/{self.epochs}], Loss: {loss.item()}")
 
                 total_loss += loss.item()
 
             avg_train_loss = total_loss / len(self.train_data_loader)
             self.training_losses.append(avg_train_loss)
-            logger.debug(
+            logger.info(
                 f"Epoch [{epoch + 1}/{self.epochs}], Train Loss: {avg_train_loss}"
             )
 
             val_loss = self.validate()
             self.validation_losses.append(val_loss)
-            logger.debug(
+            logger.info(
                 f"Epoch [{epoch + 1}/{self.epochs}], Validation Loss: {val_loss}"
             )
 
@@ -197,8 +209,10 @@ class Trainer:
                     "validation_losses": self.validation_losses,
                     "time_elapsed": time.time() - start_time,
                 }
+
                 save_state.update(self.config)
-                torch.save(save_state, self.model_save_path)
+                model_save_path = os.path.join(self.model_dir, model_name)
+                torch.save(save_state, model_save_path)
                 logger.info("Model saved at epoch {}".format(epoch + 1))
 
     def validate(self):
