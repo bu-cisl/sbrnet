@@ -2,10 +2,8 @@ import os
 import torch
 import numpy as np
 from torch.utils.data import Dataset
-from tifffile import imread
 
-# import skimage.io as io
-# from tifffile import imread
+from tifffile import imread
 
 
 # calibrated parameters for poisson gaussian noise model
@@ -74,8 +72,14 @@ class MySubset(Dataset):
 
         if self.is_val:
             stack, rfv, gt = self.dataset[idx]
-            stack += torch.sqrt(aa * stack + bb) * torch.randn(stack.shape)
-            rfv += torch.sqrt(aa * rfv + bb) * torch.randn(rfv.shape) / 3
+            stack += torch.sqrt(torch.clamp(aa * stack + bb, min=0)) * torch.randn(
+                stack.shape
+            )
+            rfv += (
+                torch.sqrt(torch.clamp(aa * rfv + bb, min=0))
+                * torch.randn(rfv.shape)
+                / 3
+            )
             return stack, rfv, gt
         else:
             stack, rfv, gt = self.dataset.__getitem__(idx)
@@ -84,9 +88,15 @@ class MySubset(Dataset):
             b = torch.randint(0, dim[2] - patch_size, (1,))
 
             stack = stack[:, a : a + patch_size, b : b + patch_size]
-            stack += torch.sqrt(aa * stack + bb) * torch.randn(stack.shape)
+            stack += torch.sqrt(torch.clamp(aa * stack + bb, min=0)) * torch.randn(
+                stack.shape
+            )
             rfv = rfv[:, a : a + patch_size, b : b + patch_size]
-            rfv += torch.sqrt(aa * rfv + bb) * torch.randn(rfv.shape) / 3
+            rfv += (
+                torch.sqrt(torch.clamp(aa * rfv + bb, min=0))
+                * torch.randn(rfv.shape)
+                / 3
+            )
             return stack, rfv, gt[:, a : a + patch_size, b : b + patch_size]
 
     def __len__(self):

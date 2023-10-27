@@ -95,7 +95,10 @@ class Trainer:
 
     def initialize_optimizer(self):
         if self.optimizer_name == "adam":
-            optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+            optimizer = optim.Adam(
+                self.model.parameters(),
+                lr=self.learning_rate,
+            )
         elif self.optimizer_name == "sgd":
             optimizer = optim.SGD(
                 self.model.parameters(), lr=self.learning_rate, momentum=0.9
