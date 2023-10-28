@@ -20,3 +20,4 @@ num_gt_layers: 24
 num_lf_views: 9
 num_rfv_layers: 24
 num_resblocks: 20
+patch_size: 224
