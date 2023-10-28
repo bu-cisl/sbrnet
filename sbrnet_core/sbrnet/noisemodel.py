@@ -7,19 +7,13 @@ from torch import Tensor, Module
 class PoissonGaussianNoiseModel(Module):
     """Poisson-Gaussian noise model for CM2 sensor: https://ieeexplore.ieee.org/document/4623175"""
 
-    # from calibrated CM2 SONY imx-226 sensor on [0,1] normalized data
-    A_STD = 5.7092e-5
-    A_MEAN = 1.49e-4
-    B_STD = 2.7754e-6
-    B_MEAN = 5.41e-6
-
-    def __init__(self, a_std=A_STD, a_mean=A_MEAN, b_std=B_STD, b_mean=B_MEAN):
+    def __init__(self, config: dict):
         super().__init__()
 
-        self.a_std = a_std
-        self.a_mean = a_mean
-        self.b_std = b_std
-        self.b_mean = b_mean
+        self.a_std = config.get("A_STD")
+        self.a_mean = config.get("A_MEAN")
+        self.b_std = config.get("B_STD")
+        self.b_mean = config.get("B_MEAN")
 
     def forward(self, stack: Tensor, rfv: Tensor) -> Tuple[Tensor, Tensor]:
         """forward(x) = x + sqrt(a*x + b) * N(0,1), where a and b are calibrated parameters
@@ -36,14 +30,17 @@ class PoissonGaussianNoiseModel(Module):
         """
         a = torch.randn(1) * self.a_std + self.a_mean
         b = torch.randn(1) * self.b_std + self.b_mean
+        recip_sqrt_num_views = 1 / torch.sqrt(
+            stack.shape[1]
+        )  # first dim is batch size, 2nd is channels/num views
 
-        stack += stack.sqrt(torch.clamp(a * stack + b, min=0)) * torch.randn(
+        stack += torch.sqrt(torch.clamp(a * stack + b, min=0)) * torch.randn(
             stack.shape
         )
         rfv += (
-            rfv.sqrt(torch.clamp(a * rfv + b, min=0))
+            torch.sqrt(torch.clamp(a * rfv + b, min=0))
             * torch.randn(rfv.shape)
-            * 0.333  # hardcoding for now for performance optimization
+            * recip_sqrt_num_views
         )
 
         return stack, rfv

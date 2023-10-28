@@ -1,5 +1,5 @@
 import os
-from functools import cache
+from functools import cached_property
 from typing import Tuple
 
 import numpy as np
@@ -77,7 +77,23 @@ class PatchDataset(Dataset):
         self.dataset = dataset
         self.patch_size = patch_size
 
-    @cache
+    @cached_property
+    def zarr(self, idx: int) -> Tuple[zarr.Array, zarr.Array, zarr.Array]:
+        """returns a zarr array of the data at index idx"""
+        stack_path = os.path.join(self.directory, f"stackbg/meas_{idx}.tiff")
+        with TiffFile(stack_path) as img:
+            stack = zarr.open(img.aszarr())
+
+        rfv_path = os.path.join(self.directory, f"rfvbg/meas_{idx}.tiff")
+        with TiffFile(rfv_path) as img:
+            rfv = zarr.open(img.aszarr())
+
+        gt_path = os.path.join(self.directory, f"gt/gt_vol_{idx}.tiff")
+        with TiffFile(gt_path) as img:
+            gt = zarr.open(img.aszarr())
+
+        return stack, rfv, gt
+
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """retrieves a random patch of the data with size patch_size
 
@@ -92,17 +108,7 @@ class PatchDataset(Dataset):
             is not significant.
         """
         # Recipe for fast dataloading with zarr courtesy of Mitchell Gilmore mgilm0re@bu.edu
-        stack_path = os.path.join(self.directory, f"stackbg/meas_{idx}.tiff")
-        with TiffFile(stack_path) as img:
-            stack = zarr.open(img.aszarr())
-
-        rfv_path = os.path.join(self.directory, f"rfvbg/meas_{idx}.tiff")
-        with TiffFile(rfv_path) as img:
-            rfv = zarr.open(img.aszarr())
-
-        gt_path = os.path.join(self.directory, f"gt/gt_vol_{idx}.tiff")
-        with TiffFile(gt_path) as img:
-            gt = zarr.open(img.aszarr())
+        stack, rfv, gt = self.zarr(idx)
 
         # uniformly sample a 224 patch
         row_start = torch.randint(0, stack.shape[-2] - self.patch_size, (1,))
