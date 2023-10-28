@@ -1,16 +1,18 @@
-import os
+import datetime
 import logging
+import os
 from typing import Tuple
-from venv import logger
+
 import torch
+import torch.nn as nn
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
-import torch.nn as nn
+from torch.cuda.amp import GradScaler, autocast
 from torch.nn import Module
 from torch.utils.data import DataLoader, Dataset
-import time
-from torch.cuda.amp import GradScaler, autocast
-import datetime
+
+from sbrnet_core.sbrnet.dataset import CustomDataset, PatchDataset
+from sbrnet_core.sbrnet.noisemodel import PoissonGaussianNoiseModel
 
 now = datetime.datetime.now()
 
@@ -24,7 +26,6 @@ timestamp = now.strftime("%Y-%m-%d_%H-%M-%S")
 # os.environ["TORCH_USE_CUDA_DSA"] = "1"
 ##
 
-from sbrnet_core.sbrnet.dataset import CustomDataset, PatchDataset
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ class Trainer:
     ):
         self.config = config
         self.model = model
+        self.noise_model = PoissonGaussianNoiseModel()
         self.learning_rate = config["learning_rate"]
         self.epochs = config["epochs"]
         self.model_dir = config["model_dir"]
@@ -85,6 +87,7 @@ class Trainer:
         split_ratio = self.config["train_split"]  # Adjust this ratio as needed
         train_dataset, val_dataset = split_dataset(complete_dataset, split_ratio)
 
+        # only train_dataset is a PatchDataset. val_dataset is full sized images.
         train_dataset = PatchDataset(
             train_dataset, patch_size=self.config["patch_size"]
         )
@@ -162,6 +165,8 @@ class Trainer:
                     rfv.to(self.device),
                     gt.to(self.device),
                 )
+
+                lf_view_stack, rfv = self.noise_model(lf_view_stack, rfv)
 
                 optimizer.zero_grad()
 
