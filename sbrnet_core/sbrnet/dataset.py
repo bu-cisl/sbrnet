@@ -74,87 +74,33 @@ class PatchDataset(Dataset):
         self.dataset = dataset
         self.patch_size = patch_size
 
-    def __getitem__(self, idx):
-        if self.is_val:
-            stack, rfv, gt = self.dataset[idx]
-            stack += torch.sqrt(torch.clamp(aa * stack + bb, min=0)) * torch.randn(
-                stack.shape
-            )
-            rfv += (
-                torch.sqrt(torch.clamp(aa * rfv + bb, min=0))
-                * torch.randn(rfv.shape)
-                / 3
-            )
-            return stack, rfv, gt
-        else:
-            stack, rfv, gt = self.dataset.__getitem__(idx)
-            dim = stack.shape
-            a = torch.randint(0, dim[1] - self.patch_size, (1,))
-            b = torch.randint(0, dim[2] - self.patch_size, (1,))
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """retrieves a random patch of the data with size patch_size
 
-            stack = stack[:, a : a + self.patch_size, b : b + patch_size]
-            stack += torch.sqrt(torch.clamp(aa * stack + bb, min=0)) * torch.randn(
-                stack.shape
-            )
-            rfv = rfv[:, a : a + patch_size, b : b + patch_size]
-            rfv += (
-                torch.sqrt(torch.clamp(aa * rfv + bb, min=0))
-                * torch.randn(rfv.shape)
-                / 3
-            )
-            return stack, rfv, gt[:, a : a + patch_size, b : b + patch_size]
+        Args:
+            idx (int): index of the data.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: patch of the data with size patch_size.
+
+            Note: One may realize that for RFV, we may crop out some peripheral information that's correlated
+            with the GT, but we neglect this correlation as the axial shearing from the off-axis microlenses
+            is not significant.
+        """
+        stack, rfv, gt = self.dataset[idx]
+
+        # uniformly sample a 224 patch
+        row_start = torch.randint(0, stack.shape[-2] - self.patch_size, (1,))
+        col_start = torch.randint(0, stack.shape[-1] - self.patch_size, (1,))
+
+        row_slice = slice(row_start, row_start + self.patch_size)
+        col_slice = slice(col_start, col_start + self.patch_size)
+
+        stack = stack[:, row_slice, col_slice]
+        rfv = rfv[:, row_slice, col_slice]
+        gt = gt[:, row_slice, col_slice]
+
+        return stack, rfv, gt
 
     def __len__(self):
         return len(self.dataset)
-
-
-class ValidationDataset(Dataset):
-    def __init__(self, folder) -> None:
-        super(ValidationDataset).__init__()
-        self.directory = folder
-        stack_folder = os.path.join(self.directory, "stackbg")
-        rfv_folder = os.path.join(self.directory, "rfvbg")
-        gt_folder = os.path.join(self.directory, "gt")
-
-        # Get the number of files in each folder
-        stack_files = os.listdir(stack_folder)
-        rfv_files = os.listdir(rfv_folder)
-        gt_files = os.listdir(gt_folder)
-
-        # Ensure all folders have the same number of files
-        assert (
-            len(stack_files) == len(rfv_files) == len(gt_files)
-        ), "Not all folders have the same number of files."
-
-        # You can also print the counts if needed
-        print(f"stackbg folder has {len(stack_files)} files.")
-        print(f"rfvbg folder has {len(rfv_files)} files.")
-        print(f"gt folder has {len(gt_files)} files")
-
-    def __len__(self) -> int:
-        data_dir = os.path.join(self.directory, "rfvbg")  # bg refers to with background
-        return sum(1 for entry in os.scandir(data_dir) if entry.is_file())
-
-    def __getitem__(self, index):
-        stack = torch.from_numpy(
-            imread(os.path.join(self.directory, f"stackbg/meas_{index}.tiff")).astype(
-                np.float32
-            )
-            / 255
-        )
-
-        rfv = torch.from_numpy(
-            imread(os.path.join(self.directory, f"rfvbg/meas_{index}.tiff")).astype(
-                np.float32
-            )
-            / 255
-        )
-
-        gt = torch.from_numpy(
-            imread(os.path.join(self.directory, f"gt/gt_vol_{index}.tiff")).astype(
-                np.float32
-            )
-            / 255
-        )
-
-        return stack, rfv, gt
