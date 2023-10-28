@@ -173,7 +173,9 @@ messroom/
 
 # SCC stuff
 *.qsub
-
 .venv/
 .direnv/
 .vscode/
+
+# models
+trained_models/

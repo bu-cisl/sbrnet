@@ -6,7 +6,7 @@ from torch.utils.data import Dataset
 from tifffile import imread
 
 
-# calibrated parameters for poisson gaussian noise model
+# calibrated parameters for poisson gaussian noise model from CM2 Sony IMX-226 sensor
 # cite
 A_STD = 5.7092e-5
 A_MEAN = 1.49e-4
@@ -20,7 +20,7 @@ class CustomDataset(Dataset):
         self.directory = folder
 
     def __len__(self):
-        data_dir = os.path.join(self.directory, "rfvbg")  # bg refers to with background
+        data_dir = os.path.join(self.directory, "rfvbg")  # bg refers to with background, rfv refers to refocused volume
         return len(
             [
                 name
