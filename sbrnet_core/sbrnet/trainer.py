@@ -24,7 +24,7 @@ timestamp = now.strftime("%Y-%m-%d_%H-%M-%S")
 # os.environ["TORCH_USE_CUDA_DSA"] = "1"
 ##
 
-from sbrnet_core.sbrnet.dataset import CustomDataset, MySubset
+from sbrnet_core.sbrnet.dataset import CustomDataset, PatchDataset
 
 logger = logging.getLogger(__name__)
 
@@ -85,8 +85,9 @@ class Trainer:
         split_ratio = self.config["train_split"]  # Adjust this ratio as needed
         train_dataset, val_dataset = split_dataset(complete_dataset, split_ratio)
 
-        train_dataset = MySubset(train_dataset, is_val=False)
-        val_dataset = MySubset(val_dataset, is_val=True)
+        train_dataset = PatchDataset(
+            train_dataset, patch_size=self.config["patch_size"]
+        )
 
         train_dataloader = DataLoader(
             train_dataset, self.config.get("batch_size"), shuffle=True

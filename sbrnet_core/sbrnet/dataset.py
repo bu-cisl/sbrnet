@@ -1,17 +1,9 @@
+from typing import Tuple
 import os
-import torch
 import numpy as np
+import torch
 from torch.utils.data import Dataset
-
 from tifffile import imread
-
-
-# calibrated parameters for poisson gaussian noise model from CM2 Sony IMX-226 sensor
-# cite
-A_STD = 5.7092e-5
-A_MEAN = 1.49e-4
-B_STD = 2.7754e-6
-B_MEAN = 5.41e-6
 
 
 class CustomDataset(Dataset):
@@ -20,7 +12,9 @@ class CustomDataset(Dataset):
         self.directory = folder
 
     def __len__(self):
-        data_dir = os.path.join(self.directory, "rfvbg")  # bg refers to with background, rfv refers to refocused volume
+        data_dir = os.path.join(
+            self.directory, "rfvbg"
+        )  # bg refers to with background, rfv refers to refocused volume
         return len(
             [
                 name
@@ -29,31 +23,49 @@ class CustomDataset(Dataset):
             ]
         )
 
-    def __getitem__(self, index):
-        stack = imread(
-            os.path.join(self.directory, f"stackbg/meas_{index}.tiff")
-        ).astype(np.float32)
-        stack = (stack - stack.min()) / (stack.max() - stack.min())
+    def __getitem__(
+        self, index: int
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """General getitem function for sbrnet-related datasets. require the stack of lightfield views,
+          and the refocused volume as inputs. and the the ground truth target.
+
+        Args:
+            index (int): index of the data. the input measurement data is stored in the format of meas_{index}.tiff,
+            and the output is stored in the format of gt_vol_{index}.tiff. yours may change, so adjust this function accordingly.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: your data in torch tensor form normalized to [0,1] with 32bit float.
+        """
+        stack = (
+            imread(os.path.join(self.directory, f"stackbg/meas_{index}.tiff")).astype(
+                np.float32
+            )
+            / 255
+        )
         stack = torch.from_numpy(stack)
 
-        rfv = imread(os.path.join(self.directory, f"rfvbg/meas_{index}.tiff")).astype(
-            np.float32
+        rfv = (
+            imread(os.path.join(self.directory, f"rfvbg/meas_{index}.tiff")).astype(
+                np.float32
+            )
+            / 255
         )
 
-        rfv = (rfv - rfv.min()) / (rfv.max() - rfv.min())
         rfv = torch.from_numpy(rfv)
 
-        gt = imread(os.path.join(self.directory, f"gt/gt_vol_{index}.tiff")).astype(
-            np.float32
+        gt = (
+            imread(os.path.join(self.directory, f"gt/gt_vol_{index}.tiff")).astype(
+                np.float32
+            )
+            / 255
         )
-        gt = (gt - gt.min()) / (gt.max() - gt.min())
         gt = torch.from_numpy(gt)
 
         return stack, rfv, gt
 
 
-class MySubset(Dataset):
-    def __init__(self, dataset: Dataset, is_val: bool):
+class PatchDataset(Dataset):
+    def __init__(self, dataset: Dataset):
         """Dataset class to include Poisson-Gaussian noise.
 
         Args:
