@@ -10,9 +10,7 @@ class PoissonGaussianNoiseModel(Module):
     def __init__(self, config: dict):
         super().__init__()
 
-        self.a_std = config.get("A_STD")
         self.a_mean = config.get("A_MEAN")
-        self.b_std = config.get("B_STD")
         self.b_mean = config.get("B_MEAN")
 
     def forward(self, stack: Tensor, rfv: Tensor) -> Tuple[Tensor, Tensor]:
@@ -28,17 +26,16 @@ class PoissonGaussianNoiseModel(Module):
         Returns:
             Tuple[Tensor, Tensor]: stack and rfv with poisson-gaussian noise added
         """
-        a = torch.randn(1) * self.a_std + self.a_mean
-        b = torch.randn(1) * self.b_std + self.b_mean
+
         recip_sqrt_num_views = 1 / torch.sqrt(
             stack.shape[1]
         )  # first dim is batch size, 2nd is channels/num views
 
-        stack += torch.sqrt(torch.clamp(a * stack + b, min=0)) * torch.randn(
-            stack.shape
-        )
+        stack += torch.sqrt(
+            torch.clamp(self.a_mean * stack + self.b_mean, min=0)
+        ) * torch.randn(stack.shape)
         rfv += (
-            torch.sqrt(torch.clamp(a * rfv + b, min=0))
+            torch.sqrt(torch.clamp(self.a_mean * rfv + self.b_mean, min=0))
             * torch.randn(rfv.shape)
             * recip_sqrt_num_views
         )
