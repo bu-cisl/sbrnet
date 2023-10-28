@@ -1,5 +1,5 @@
 import os
-from functools import cached_property
+from functools import cached_property, cache
 from typing import Tuple
 
 import numpy as np
@@ -67,6 +67,19 @@ class CustomDataset(Dataset):
         return stack, rfv, gt
 
 
+class ZarrData:
+    def __init__(self, directory: str, pattern: str):
+        self.directory = directory
+        self.pattern = pattern
+        self.open_zarrs = []
+    
+    # NOTE: ensure cache is larger than number of items
+    @cache
+    def __getitem__(self, index: int):
+        path = os.path.join(self.directory, self.pattern.format(index))
+        with TiffFile(path) as img:
+            return zarr.open(img.aszarr())
+
 class PatchDataset(Dataset):
     def __init__(self, dataset: Dataset, patch_size: int):
         """Dataset class to include Poisson-Gaussian noise.
@@ -76,23 +89,18 @@ class PatchDataset(Dataset):
         """
         self.dataset = dataset
         self.patch_size = patch_size
+    
+    @cached_property
+    def stack(self) -> ZarrData:
+        return ZarrData(self.directory, "stackbg/meas_{index}.tiff")
 
     @cached_property
-    def zarr(self, idx: int) -> Tuple[zarr.Array, zarr.Array, zarr.Array]:
-        """returns a zarr array of the data at index idx"""
-        stack_path = os.path.join(self.directory, f"stackbg/meas_{idx}.tiff")
-        with TiffFile(stack_path) as img:
-            stack = zarr.open(img.aszarr())
+    def rfv(self) -> ZarrData:
+        return ZarrData(self.directory, "rfvbg/meas_{index}.tiff")
 
-        rfv_path = os.path.join(self.directory, f"rfvbg/meas_{idx}.tiff")
-        with TiffFile(rfv_path) as img:
-            rfv = zarr.open(img.aszarr())
-
-        gt_path = os.path.join(self.directory, f"gt/gt_vol_{idx}.tiff")
-        with TiffFile(gt_path) as img:
-            gt = zarr.open(img.aszarr())
-
-        return stack, rfv, gt
+    @cached_property
+    def gt(self) -> ZarrData:
+        return ZarrData(self.directory, "gt/gt_vol_{index}.tiff")
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """retrieves a random patch of the data with size patch_size
@@ -108,7 +116,9 @@ class PatchDataset(Dataset):
             is not significant.
         """
         # Recipe for fast dataloading with zarr courtesy of Mitchell Gilmore mgilm0re@bu.edu
-        stack, rfv, gt = self.zarr(idx)
+        stack = self.stack[idx]
+        rfv = self.rfv[idx]
+        gt = self.gt[idx]
 
         # uniformly sample a 224 patch
         row_start = torch.randint(0, stack.shape[-2] - self.patch_size, (1,))
