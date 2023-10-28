@@ -65,23 +65,16 @@ class CustomDataset(Dataset):
 
 
 class PatchDataset(Dataset):
-    def __init__(self, dataset: Dataset):
+    def __init__(self, dataset: Dataset, patch_size: int):
         """Dataset class to include Poisson-Gaussian noise.
 
         Args:
-            dataset (Dataset): the complete clean dataset
-            is_val (boolean): if true, the dataset is for validation, else for training.
-                              for validation, do not do any cropping
+            dataset (Dataset): the train split dataset after torch.utils.data.randomsplit for valid and train
         """
         self.dataset = dataset
-        self.is_val = is_val
+        self.patch_size = patch_size
 
     def __getitem__(self, idx):
-        patch_size = 224
-
-        aa = torch.randn(1) * A_STD + A_MEAN
-        bb = torch.randn(1) * B_STD + B_MEAN
-
         if self.is_val:
             stack, rfv, gt = self.dataset[idx]
             stack += torch.sqrt(torch.clamp(aa * stack + bb, min=0)) * torch.randn(
@@ -96,10 +89,10 @@ class PatchDataset(Dataset):
         else:
             stack, rfv, gt = self.dataset.__getitem__(idx)
             dim = stack.shape
-            a = torch.randint(0, dim[1] - patch_size, (1,))
-            b = torch.randint(0, dim[2] - patch_size, (1,))
+            a = torch.randint(0, dim[1] - self.patch_size, (1,))
+            b = torch.randint(0, dim[2] - self.patch_size, (1,))
 
-            stack = stack[:, a : a + patch_size, b : b + patch_size]
+            stack = stack[:, a : a + self.patch_size, b : b + patch_size]
             stack += torch.sqrt(torch.clamp(aa * stack + bb, min=0)) * torch.randn(
                 stack.shape
             )
