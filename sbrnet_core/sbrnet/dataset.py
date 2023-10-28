@@ -1,9 +1,12 @@
-from typing import Tuple
 import os
+from functools import cache
+from typing import Tuple
+
 import numpy as np
 import torch
+import zarr
+from tifffile import imread, TiffFile
 from torch.utils.data import Dataset
-from tifffile import imread
 
 
 class CustomDataset(Dataset):
@@ -74,6 +77,7 @@ class PatchDataset(Dataset):
         self.dataset = dataset
         self.patch_size = patch_size
 
+    @cache
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """retrieves a random patch of the data with size patch_size
 
@@ -87,7 +91,18 @@ class PatchDataset(Dataset):
             with the GT, but we neglect this correlation as the axial shearing from the off-axis microlenses
             is not significant.
         """
-        stack, rfv, gt = self.dataset[idx]
+        # Recipe for fast dataloading with zarr courtesy of Mitchell Gilmore mgilm0re@bu.edu
+        stack_path = os.path.join(self.directory, f"stackbg/meas_{idx}.tiff")
+        with TiffFile(stack_path) as img:
+            stack = zarr.open(img.aszarr())
+
+        rfv_path = os.path.join(self.directory, f"rfvbg/meas_{idx}.tiff")
+        with TiffFile(rfv_path) as img:
+            rfv = zarr.open(img.aszarr())
+
+        gt_path = os.path.join(self.directory, f"gt/gt_vol_{idx}.tiff")
+        with TiffFile(gt_path) as img:
+            gt = zarr.open(img.aszarr())
 
         # uniformly sample a 224 patch
         row_start = torch.randint(0, stack.shape[-2] - self.patch_size, (1,))
@@ -96,9 +111,11 @@ class PatchDataset(Dataset):
         row_slice = slice(row_start, row_start + self.patch_size)
         col_slice = slice(col_start, col_start + self.patch_size)
 
-        stack = stack[:, row_slice, col_slice]
-        rfv = rfv[:, row_slice, col_slice]
-        gt = gt[:, row_slice, col_slice]
+        stack = torch.from_numpy(
+            stack[:, row_slice, col_slice].astype(np.float32) / 255
+        )
+        rfv = torch.from_numpy(rfv[:, row_slice, col_slice].astype(np.float32) / 255)
+        gt = torch.from_numpy(gt[:, row_slice, col_slice].astype(np.float32) / 255)
 
         return stack, rfv, gt
 
