@@ -1,7 +1,8 @@
 from typing import Tuple
+from functools import cached_property
 import torch
-import torch.nn as nn
-from torch import Tensor, Module
+from torch import Tensor
+from torch.nn import Module
 
 
 class PoissonGaussianNoiseModel(Module):
@@ -9,9 +10,13 @@ class PoissonGaussianNoiseModel(Module):
 
     def __init__(self, config: dict):
         super().__init__()
-
+        self.num_views = config["num_lf_views"]
         self.a_mean = config.get("A_MEAN")
         self.b_mean = config.get("B_MEAN")
+
+    @cached_property
+    def recip_sqrt_num_views(self) -> torch.Tensor:
+        return 1 / torch.sqrt(torch.tensor(self.num_views))
 
     def forward(self, stack: Tensor, rfv: Tensor) -> Tuple[Tensor, Tensor]:
         """forward(x) = x + sqrt(a*x + b) * N(0,1), where a and b are calibrated parameters
@@ -27,17 +32,15 @@ class PoissonGaussianNoiseModel(Module):
             Tuple[Tensor, Tensor]: stack and rfv with poisson-gaussian noise added
         """
 
-        recip_sqrt_num_views = 1 / torch.sqrt(
-            stack.shape[1]
-        )  # first dim is batch size, 2nd is channels/num views
+        recip_sqrt_num_views = self.recip_sqrt_num_views.to(stack.device)
 
         stack += torch.sqrt(
             torch.clamp(self.a_mean * stack + self.b_mean, min=0)
-        ) * torch.randn(stack.shape)
+        ) * torch.randn(stack.shape).to(stack.device)
+
         rfv += (
             torch.sqrt(torch.clamp(self.a_mean * rfv + self.b_mean, min=0))
-            * torch.randn(rfv.shape)
+            * torch.randn(rfv.shape).to(rfv.device)
             * recip_sqrt_num_views
         )
-
         return stack, rfv

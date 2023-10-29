@@ -2,7 +2,7 @@ import datetime
 import logging
 import os
 from typing import Tuple
-from time import time
+import time
 
 import torch
 import torch.nn as nn
@@ -39,7 +39,7 @@ class Trainer:
     ):
         self.config = config
         self.model = model
-        self.noise_model = PoissonGaussianNoiseModel()
+        self.noise_model = PoissonGaussianNoiseModel(config)
         self.learning_rate = config["learning_rate"]
         self.epochs = config["epochs"]
         self.model_dir = config["model_dir"]
@@ -72,9 +72,9 @@ class Trainer:
             print(
                 f"Unknown loss criterion: {self.criterion_name}. Using BCEWithLogitsLoss."
             )
-        self.train_data_loader, self.val_data_loader = self.get_dataloaders()
+        self.train_data_loader, self.val_data_loader = self._get_dataloaders()
 
-    def get_dataloaders(self) -> Tuple[DataLoader, DataLoader]:
+    def _get_dataloaders(self) -> Tuple[DataLoader, DataLoader]:
         def split_dataset(dataset, split_ratio):
             dataset_size = len(dataset)
             train_size = int(split_ratio * dataset_size)
@@ -90,7 +90,9 @@ class Trainer:
 
         # only train_dataset is a PatchDataset. val_dataset is full sized images.
         train_dataset = PatchDataset(
-            train_dataset, patch_size=self.config["patch_size"]
+            dataset=train_dataset,
+            directory=self.config["dataset_path"],
+            patch_size=self.config["patch_size"],
         )
 
         train_dataloader = DataLoader(
@@ -102,13 +104,13 @@ class Trainer:
 
         return train_dataloader, val_dataloader
 
-    def set_random_seed(self):
+    def _set_random_seed(self):
         if self.random_seed is not None:
             torch.manual_seed(self.random_seed)
             if torch.cuda.is_available():
                 torch.cuda.manual_seed_all(self.random_seed)
 
-    def initialize_optimizer(self):
+    def _initialize_optimizer(self):
         if self.optimizer_name == "adam":
             optimizer = optim.Adam(
                 self.model.parameters(),
@@ -123,7 +125,7 @@ class Trainer:
             optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
         return optimizer
 
-    def initialize_lr_scheduler(self, optimizer):
+    def _initialize_lr_scheduler(self, optimizer):
         if self.lr_scheduler_name == "cosine_annealing":
             scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.epochs)
         elif self.lr_scheduler_name == "step_lr":
@@ -147,17 +149,18 @@ class Trainer:
 
     def train(self):
         model_name = f"sbrnet_{timestamp}.pt"
-        self.set_random_seed()
+        self.model.to(self.device)
+        self.noise_model.to(self.device)
+        self._set_random_seed()
 
-        optimizer = self.initialize_optimizer()
-        scheduler = self.initialize_lr_scheduler(optimizer)
+        optimizer = self._initialize_optimizer()
+        scheduler = self._initialize_lr_scheduler(optimizer)
         start_time = time.time()
 
         if self.use_amp:
             print("Using mixed-precision training with AMP.")
 
         for epoch in range(self.epochs):
-            self.model.to(self.device)
             self.model.train()
             total_loss = 0
             for lf_view_stack, rfv, gt in self.train_data_loader:

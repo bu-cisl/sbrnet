@@ -10,7 +10,7 @@ from torch.utils.data import Dataset
 
 
 class CustomDataset(Dataset):
-    def __init__(self, folder):
+    def __init__(self, folder: str):
         super(CustomDataset, self).__init__()
         self.directory = folder
 
@@ -72,7 +72,7 @@ class ZarrData:
         self.directory = directory
         self.pattern = pattern
         self.open_zarrs = []
-    
+
     # NOTE: ensure cache is larger than number of items
     @cache
     def __getitem__(self, index: int):
@@ -80,27 +80,29 @@ class ZarrData:
         with TiffFile(path) as img:
             return zarr.open(img.aszarr())
 
+
 class PatchDataset(Dataset):
-    def __init__(self, dataset: Dataset, patch_size: int):
-        """Dataset class to include Poisson-Gaussian noise.
+    def __init__(self, dataset: Dataset, directory: str, patch_size: int):
+        """Dataset class for patch data (cropping).
 
         Args:
             dataset (Dataset): the train split dataset after torch.utils.data.randomsplit for valid and train
         """
         self.dataset = dataset
+        self.directory = directory
         self.patch_size = patch_size
-    
+
     @cached_property
     def stack(self) -> ZarrData:
-        return ZarrData(self.directory, "stackbg/meas_{index}.tiff")
+        return ZarrData(self.directory, "stackbg/meas_{}.tiff")
 
     @cached_property
     def rfv(self) -> ZarrData:
-        return ZarrData(self.directory, "rfvbg/meas_{index}.tiff")
+        return ZarrData(self.directory, "rfvbg/meas_{}.tiff")
 
     @cached_property
     def gt(self) -> ZarrData:
-        return ZarrData(self.directory, "gt/gt_vol_{index}.tiff")
+        return ZarrData(self.directory, "gt/gt_vol_{}.tiff")
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """retrieves a random patch of the data with size patch_size
@@ -120,7 +122,7 @@ class PatchDataset(Dataset):
         rfv = self.rfv[idx]
         gt = self.gt[idx]
 
-        # uniformly sample a 224 patch
+        # uniformly sample a patch
         row_start = torch.randint(0, stack.shape[-2] - self.patch_size, (1,))
         col_start = torch.randint(0, stack.shape[-1] - self.patch_size, (1,))
 
