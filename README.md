@@ -13,12 +13,18 @@ Imaging through scattering is a pervasive and difficult problem in many biologic
 All data to reproduce results from the paper can be found in this [**google drive**](https://drive.google.com/drive/folders/1XszF-KL4qUXUUmTcvLqYMwdYx6lP7dcG?usp=share_link).
 
 ### Usage
-Clone the repo into a folder of your choice with <br>
-```git clone https://github.com/bu-cisl/sbrnet.git``` <br>
-and set up the package with <br>
-```python setup.py```. <br>
-Ensure the necessary dependencies are installed using <br>
-```pip install -r requirements.txt```.
+Clone the repo into a folder of your choice with
+```
+git clone https://github.com/bu-cisl/sbrnet.git
+``` 
+and set up the package with 
+```
+python setup.py
+``` 
+Ensure the necessary dependencies are installed using 
+```
+pip install -r requirements.txt
+```
 
 ## License
 This project is licensed under the terms of the MIT license. see the [LICENSE](LICENSE) file for details
