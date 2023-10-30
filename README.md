@@ -14,11 +14,11 @@ All data to reproduce results from the paper can be found in this [**google driv
 
 ### Usage
 Clone the repo into a folder of your choice with <br>
-`git clone https://github.com/bu-cisl/sbrnet.git` <br>
+```git clone https://github.com/bu-cisl/sbrnet.git``` <br>
 and set up the package with <br>
-`python setup.py`. <br>
+```python setup.py```. <br>
 Ensure the necessary dependencies are installed using <br>
-`pip install -r requirements.txt`.
+```pip install -r requirements.txt```.
 
 ## License
 This project is licensed under the terms of the MIT license. see the [LICENSE](LICENSE) file for details
