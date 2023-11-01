@@ -127,7 +127,9 @@ class Trainer:
 
     def _initialize_lr_scheduler(self, optimizer):
         if self.lr_scheduler_name == "cosine_annealing":
-            scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.epochs)
+            scheduler = lr_scheduler.CosineAnnealingLR(
+                optimizer, T_max=self.config["cosine_annealing_T_max"]
+            )
         elif self.lr_scheduler_name == "step_lr":
             # StepLR scheduler
             step_size = self.config.get("step_lr_step_size", 10)

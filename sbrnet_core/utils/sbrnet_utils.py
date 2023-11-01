@@ -1,8 +1,14 @@
 import numpy as np
-from scipy.ndimage import maximum_filter
+from typing import Tuple
 from skimage.feature import peak_local_max
+from sbrnet_core.utils import (
+    linear_normalize,
+    read_tiff,
+    uint8_to_float,
+    normalize_psf_power,
+    shift_array,
+)
 
-from utils.utils import *
 
 # Constants
 CM2_SIZE = [2076, 3088]
@@ -93,6 +99,8 @@ def get_meas_mean(im: np.ndarray) -> np.float32:
     Returns:
         np.float32: average of all the peaks of the signal
     """
+    # remove noisy background that may contribute to the peak finding
+    im[im < 0.03] = 0
     coords = get_coord_max(im)
 
     # Step 1: Extract pixel values for the coordinates
@@ -159,7 +167,8 @@ def make_measurement(
         bg_mean (np.float32): float for the mean values in the raw value noise image
 
     Returns:
-        np.ndarray: _description_
+        np.ndarray: scattering measurement simulation with value noise modeling the low-contrast effect
+        of scattering. same shape as freespace_img.
     """
     meas_mean = get_meas_mean(freespace_img)
     S = (bg_mean * SBR - bg_mean) / meas_mean

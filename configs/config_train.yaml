@@ -13,6 +13,7 @@ optimizer: "adam"
 criterion_name: "bce_with_logits"
 use_amp: True
 lr_scheduler: "cosine_annealing"
+cosine_annealing_T_max: 30
 
 
 # model stuff

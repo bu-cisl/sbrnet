@@ -1,11 +1,10 @@
-import os
+# import os
 import numpy as np
 from typing import Tuple
 
 from tifffile import imread, imwrite
 import imageio.v3 as iio
 from scipy.signal import fftconvolve
-from multiprocessing import Pool
 
 
 def read_tiff(path: str) -> np.ndarray:
@@ -287,27 +286,6 @@ def lsi_fwd_mdl(obj: np.ndarray, psf: np.ndarray) -> np.ndarray:
 
 def process_slice(z, obj, psf):
     return conv2d(obj[z, :, :], psf[z, :, :])
-
-
-@DeprecationWarning
-def lsi_fwd_mdl_multiproc(obj: np.ndarray, psf: np.ndarray) -> np.ndarray:
-    """Linear shift-invariant (LSI) forward model to propagate an object to the image plane via a PSF
-
-    Args:
-        obj (np.ndarray): object. can be 2D or 3D (z, x, y)
-        psf (np.ndarray): point spread function (PSF) has to be the same shape as the object.
-
-    Returns:
-        np.ndarray: LSI measurement
-    """
-
-    with Pool(processes=2) as pool:  # Adjust the number of processes as needed
-        results = pool.starmap(
-            process_slice, [(z, obj, psf) for z in range(obj.shape[0])]
-        )
-
-    meas = np.sum(results, axis=0)
-    return meas / np.max(meas)
 
 
 def shift_array(arr, shift_x, shift_y):
