@@ -1,9 +1,10 @@
 import logging
 import argparse
 from datetime import datetime  # Import datetime module
+import time
 
 from sbrnet_core.config_loader import load_config
-from sbrnet_core.synthetic_data.generate_synthetic_data import make_synthetic_dataset
+from sbrnet_core.synthetic_data.generate_synthetic_data_v1 import make_synthetic_dataset
 
 # Get the current timestamp as a string
 current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -21,8 +22,13 @@ def main(config_file):
     config = load_config(config_file)
 
     logger.info("Starting synthetic data generation...")
+    logger.info(f"Using ray: {config['use_ray']}")
+    start_time = time.time()
     make_synthetic_dataset(config)
     logger.info("Synthetic data generation complete.")
+    logger.info(
+        f"With use_ray set to {config['use_ray']}, total time: {time.time() - start_time} seconds."
+    )
 
 
 if __name__ == "__main__":
