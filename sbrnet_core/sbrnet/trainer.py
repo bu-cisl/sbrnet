@@ -3,6 +3,7 @@ import logging
 import os
 from typing import Tuple
 import time
+from pandas import read_parquet
 
 import torch
 import torch.nn as nn
@@ -84,14 +85,14 @@ class Trainer:
             )
             return train_dataset, val_dataset
 
-        complete_dataset: Dataset = CustomDataset(self.config["dataset_path"])
-        split_ratio = self.config["train_split"]  # Adjust this ratio as needed
+        complete_dataset: Dataset = CustomDataset(self.config["dataset_pq"])
+        split_ratio = self.config["train_split"]
         train_dataset, val_dataset = split_dataset(complete_dataset, split_ratio)
 
         # only train_dataset is a PatchDataset. val_dataset is full sized images.
         train_dataset = PatchDataset(
             dataset=train_dataset,
-            directory=self.config["dataset_path"],
+            df_path=self.config["dataset_pq"],
             patch_size=self.config["patch_size"],
         )
 

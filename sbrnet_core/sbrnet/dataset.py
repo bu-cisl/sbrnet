@@ -1,6 +1,7 @@
 import os
 from functools import cached_property, cache
 from typing import Tuple
+from pandas import DataFrame, read_parquet
 
 import numpy as np
 import torch
@@ -10,19 +11,12 @@ from torch.utils.data import Dataset
 
 
 class CustomDataset(Dataset):
-    def __init__(self, folder: str):
+    def __init__(self, df_path: str):
         super(CustomDataset, self).__init__()
-        self.directory = folder
+        self.df = read_parquet(df_path)
 
     def __len__(self):
-        data_dir = os.path.join(self.directory, "rfv")  # rfv refers to refocused volume
-        return len(
-            [
-                name
-                for name in os.listdir(data_dir)
-                if os.path.isfile(os.path.join(data_dir, name))
-            ]
-        )
+        return len(self.df)
 
     def __getitem__(
         self, index: int
@@ -37,70 +31,59 @@ class CustomDataset(Dataset):
         Returns:
             Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: your data in torch tensor form normalized to [0,1] with 32bit float.
         """
-        stack = (
-            imread(os.path.join(self.directory, f"stack/meas_{index}.tiff")).astype(
-                np.float32
-            )
-            / 255
-        )
+
+        stack = imread(self.df["stack_path"].iloc[index]).astype(np.float32) / 255
         stack = torch.from_numpy(stack)
 
-        rfv = (
-            imread(os.path.join(self.directory, f"rfv/meas_{index}.tiff")).astype(
-                np.float32
-            )
-            / 255
-        )
-
+        rfv = imread(self.df["rfv_path"].iloc[index]).astype(np.float32) / 255
         rfv = torch.from_numpy(rfv)
 
-        gt = (
-            imread(os.path.join(self.directory, f"gt/gt_vol_{index}.tiff")).astype(
-                np.float32
-            )
-            / 255
-        )
+        gt = imread(self.df["gt_path"].iloc[index]).astype(np.float32) / 255
         gt = torch.from_numpy(gt)
 
         return stack, rfv, gt
 
 
 class ZarrData:
-    def __init__(self, directory: str, pattern: str):
-        self.directory = directory
-        self.pattern = pattern
+    def __init__(self, df: DataFrame, datatype: str):
+        self.df = df
+
+        if datatype not in ["stack", "rfv", "gt"]:
+            raise ValueError("datatype must be one of stack, rfv, gt")
+
+        self.datatype = datatype
         self.open_zarrs = []
 
     # NOTE: ensure cache is larger than number of items
     @cache
     def __getitem__(self, index: int):
-        path = os.path.join(self.directory, self.pattern.format(index))
+        path = self.df[self.datatype + "_path"].iloc[index]
         with TiffFile(path) as img:
             return zarr.open(img.aszarr())
 
 
 class PatchDataset(Dataset):
-    def __init__(self, dataset: Dataset, directory: str, patch_size: int):
+    def __init__(self, dataset: Dataset, df_path: str, patch_size: int):
         """Dataset class for patch data (cropping).
 
         Args:
             dataset (Dataset): the train split dataset after torch.utils.data.randomsplit for valid and train
         """
         self.dataset = dataset
-        self.directory = directory
+        self.df = read_parquet(df_path)
         self.patch_size = patch_size
 
     @cached_property
     def stack(self) -> ZarrData:
-        return ZarrData(self.directory, "stack/meas_{}.tiff")
+        return ZarrData(self.df, "stack")
 
     @cached_property
     def rfv(self) -> ZarrData:
-        return ZarrData(self.directory, "rfv/meas_{}.tiff")
+        return ZarrData(self.df, "rfv")
 
     @cached_property
     def gt(self) -> ZarrData:
-        return ZarrData(self.directory, "gt/gt_vol_{}.tiff")
+        return ZarrData(self.df, "gt")
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """retrieves a random patch of the data with size patch_size
