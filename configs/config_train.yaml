@@ -1,10 +1,12 @@
+# paths
+dataset_path: "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/training_data/dataset1"
+model_dir: "/projectnb/tianlabdl/jalido/sbrnet_proj/trained_models/"
+
 # training stuff
-dataset_path: "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/training_data/dataset0"
 train_split: 0.8
-batch_size: 16
+batch_size: 24
 learning_rate: 0.001
 epochs: 20000
-model_dir: "/projectnb/tianlabdl/jalido/sbrnet_proj/trained_models/"
 backbone: "resnet"
 resnet_channels: 48
 weight_init: "kaiming_normal"

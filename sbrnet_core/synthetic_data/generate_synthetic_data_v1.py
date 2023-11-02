@@ -88,18 +88,15 @@ def make_synthetic_dataset(config: dict) -> None:
     if not os.path.exists(out_rfv_folder):
         os.makedirs(out_rfv_folder)
 
-    if config.get(
-        "use_ray", False
-    ):  # Check if the 'use_ray' flag is set to True in config
+    if config["use_ray"]:
         ray.init(ignore_reinit_error=True)
-        # Parallelized version
         futures = [
             process_single_iteration.remote(i, config) for i in range(config["N"])
         ]
         results = ray.get(futures)
         df = pd.concat(results, ignore_index=True, axis=0)
+    # BUG: This is not working. The code below is not being executed
     else:
-        # Non-parallelized version
         df = pd.DataFrame()
         for i in range(config["N"]):
             rowdata = process_single_iteration(i, config)  # Call the function directly

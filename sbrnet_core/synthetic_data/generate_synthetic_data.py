@@ -16,7 +16,10 @@ logger = logging.getLogger(__name__)
 
 
 def make_synthetic_dataset(config: dict) -> None:
-    """script to take config to generate synthetic dataset.
+    """DEPRECATED: This script is no longer in use and has been replaced by a newer version.
+    Please refer to the updated script for generating synthetic datasets.
+
+    script to take config to generate synthetic dataset.
     Requires existing datasets of ground truth objects and value noise samples.
     Also requires the system PSF, and apodization functions. These paths are defined in the config.
 
