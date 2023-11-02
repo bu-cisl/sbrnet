@@ -40,7 +40,7 @@ class CustomDataset(Dataset):
             Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: your data in torch tensor form normalized to [0,1] with 32bit float.
         """
         stack = (
-            imread(os.path.join(self.directory, f"stackbg/meas_{index}.tiff")).astype(
+            imread(os.path.join(self.directory, f"stack/meas_{index}.tiff")).astype(
                 np.float32
             )
             / 255
@@ -48,7 +48,7 @@ class CustomDataset(Dataset):
         stack = torch.from_numpy(stack)
 
         rfv = (
-            imread(os.path.join(self.directory, f"rfvbg/meas_{index}.tiff")).astype(
+            imread(os.path.join(self.directory, f"rfv/meas_{index}.tiff")).astype(
                 np.float32
             )
             / 255
