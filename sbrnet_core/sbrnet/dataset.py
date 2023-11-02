@@ -15,9 +15,7 @@ class CustomDataset(Dataset):
         self.directory = folder
 
     def __len__(self):
-        data_dir = os.path.join(
-            self.directory, "rfvbg"
-        )  # bg refers to with background, rfv refers to refocused volume
+        data_dir = os.path.join(self.directory, "rfv")  # rfv refers to refocused volume
         return len(
             [
                 name
@@ -94,11 +92,11 @@ class PatchDataset(Dataset):
 
     @cached_property
     def stack(self) -> ZarrData:
-        return ZarrData(self.directory, "stackbg/meas_{}.tiff")
+        return ZarrData(self.directory, "stack/meas_{}.tiff")
 
     @cached_property
     def rfv(self) -> ZarrData:
-        return ZarrData(self.directory, "rfvbg/meas_{}.tiff")
+        return ZarrData(self.directory, "rfv/meas_{}.tiff")
 
     @cached_property
     def gt(self) -> ZarrData:
