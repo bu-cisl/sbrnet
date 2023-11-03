@@ -36,7 +36,7 @@ class Trainer:
     def __init__(
         self,
         model: Module,
-        config,
+        config: dict,
     ):
         self.config = config
         self.model = model
