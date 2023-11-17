@@ -7,8 +7,10 @@ num_slices: 24
 # Keep as true for this package. False doesn't work yet. nevertheless, using ray is much faster, of course.
 use_ray: True
 
-out_path: "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/training_data/dataset1/"
-gt_path: "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/gts/composite/"
+# out_path: "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/training_data/dataset1/"
+out_path: "/projectnb/tianlabdl/shared_data/for_nicholas/dataset1/"
+
+gt_path: "/projectnb/tianlabdl/shared_data/synthetic_vasculature/16um_diameter/"
 
 psf_path: "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/cm2v2/z_uninterpolated_PSF.tif"
 lenslet_apodize_path: "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/cm2v2/lensletapodize.tiff"

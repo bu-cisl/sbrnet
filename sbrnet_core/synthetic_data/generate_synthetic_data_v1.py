@@ -35,9 +35,10 @@ def process_single_iteration(i, config):
     out_folder = config["out_path"]
     out_stack_folder = os.path.join(out_folder, "stack")
     out_rfv_folder = os.path.join(out_folder, "rfv")
+    # out_gt_folder = os.path.join(out_folder, "gt")
 
     sbr = random.uniform(low_sbr, upper_sbr)
-    gt_path = os.path.join(gt_folder, f"gt_vol_{i}.tiff")
+    gt_path = os.path.join(gt_folder, f"Lnet_i_{i}.tiff")
     gt = full_read_tiff(gt_path)
 
     value_path = os.path.join(value_folder, f"value_{i+1}.png")
@@ -56,9 +57,13 @@ def process_single_iteration(i, config):
 
     out_stack_path = os.path.join(out_stack_folder, f"meas_{i}.tiff")
     out_rfv_path = os.path.join(out_rfv_folder, f"meas_{i}.tiff")
+    # out_gt_path = os.path.join(out_gt_folder, f"gt_vol_{i}.tiff")
 
     write_tiff(stack, out_stack_path)
     write_tiff(rfv, out_rfv_path)
+    write_tiff(
+        gt, out_gt_path
+    )  # remove this line if you don't want to save the ground truth
 
     rowdata = pd.DataFrame(
         {
@@ -68,6 +73,7 @@ def process_single_iteration(i, config):
             "gt_folder": [gt_folder],
             "value_path": [value_path],
             "sbr": [sbr],
+            "sbr_range": [f"{low_sbr}-{upper_sbr}"],
             "stack_path": [out_stack_path],
             "rfv_path": [out_rfv_path],
             "gt_path": [gt_path],
@@ -78,7 +84,7 @@ def process_single_iteration(i, config):
 
 
 def make_synthetic_dataset(config: dict) -> None:
-    out_folder = config["out_path"]
+    out_folder = config["out_dir"]
     if not os.path.exists(out_folder):
         os.makedirs(out_folder)
     out_stack_folder = os.path.join(out_folder, "stack")
@@ -87,6 +93,9 @@ def make_synthetic_dataset(config: dict) -> None:
     out_rfv_folder = os.path.join(out_folder, "rfv")
     if not os.path.exists(out_rfv_folder):
         os.makedirs(out_rfv_folder)
+    # out_gt_folder = os.path.join(out_folder, "gt")
+    # if not os.path.exists(out_gt_folder):
+    #     os.makedirs(out_gt_folder)
 
     if config["use_ray"]:
         ray.init(ignore_reinit_error=True)
