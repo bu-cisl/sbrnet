@@ -1,6 +1,6 @@
 import logging
 import argparse
-from datetime import datetime  # Import datetime module
+from datetime import datetime
 import time
 
 from sbrnet_core.config_loader import load_config
@@ -18,8 +18,8 @@ logging.basicConfig(filename=log_file_path, level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
-def main(config_file):
-    config = load_config(config_file)
+def main(args):
+    config = vars(args)
 
     logger.info("Starting synthetic data generation...")
     logger.info(f"Using ray: {config['use_ray']}")
@@ -33,40 +33,14 @@ def main(config_file):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Generate synthetic data using a config file."
-    )
-    parser.add_argument(
-        "config_file", help="Path to the config file (e.g., config.yaml)"
-    )
-
-    args = parser.parse_args()
-
-    main(args.config_file)
-
-def main(args):
-    # Construct the configuration dictionary from the argparse namespace
-    config = vars(args)
-
-    model = compile(SBRNet(config))
-
-    trainer = Trainer(model, config)
-
-    logger.info("Starting training...")
-
-    trainer.train()
-
-    logger.info("Training complete.")
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
         description="Train SBRNet with command-line parameters."
     )
 
-    # paths
-    parser.add_argument("--out_dir", type=str, help="output directory to save stack and rfv measurements")
-
-    # training stuff
+    parser.add_argument(
+        "--out_dir",
+        type=str,
+        help="output directory to save stack and rfv measurements",
+    )
     parser.add_argument(
         "--lower_sbr",
         type=float,
@@ -79,10 +53,45 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--N",
-        type=float,
-        help="upper bound for SBR",
+        type=int,
+        help="number of pairs to generate",
     )
-    
+    parser.add_argument(
+        "--use_ray",
+        type=bool,
+        default=True,
+        help="whether to use ray for parallelization",
+    )
+    parser.add_argument(
+        "--gt_path",
+        type=str,
+        default="/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/synthetic_vasculature/gt_vasculature/",
+        help="folder of ground truths",
+    )
+    parser.add_argument(
+        "--psf_path",
+        type=str,
+        default="/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/cm2v2/z_uninterpolated_PSF.tif",
+        help="path of psf",
+    )
+    parser.add_argument(
+        "--lenslet_apodize_path",
+        type=str,
+        default="/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/cm2v2/lensletapodize.tiff",
+        help="path of lenslet apodization function",
+    )
+    parser.add_argument(
+        "--mla_apodize_path",
+        type=str,
+        default="/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/cm2v2/mlaapodize.tiff",
+        help="path of mla apodization function",
+    )
+    parser.add_argument(
+        "--value_path",
+        type=str,
+        default="/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/valuenoise/",
+        help="folder of value noise samples",
+    )
 
     # Parse the arguments
     args = parser.parse_args()

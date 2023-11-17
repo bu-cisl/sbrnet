@@ -172,7 +172,7 @@ messroom/
 .log/
 
 # SCC stuff
-*.qsub
+# *.qsub
 .venv/
 .direnv/
 .vscode/

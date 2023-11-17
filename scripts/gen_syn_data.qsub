@@ -1,0 +1,33 @@
+#!/bin/bash -l
+
+# Set SCC project
+#$ -P tianlabdl
+
+# Specify hard time limit for the job. 
+#   The job will be aborted if it runs longer than this time.
+#   The default time is 12 hours
+#$ -l h_rt=12:00:00
+
+
+# Combine output and error files into a single file
+#$ -j y
+
+# Keep track of information related to the current job
+echo "=========================================================="
+echo "Start date : $(date)"
+echo "Job name : $JOB_NAME"
+echo "Job ID : $JOB_ID  $SGE_TASK_ID"
+echo "=========================================================="
+
+# Specify number of cores 16: a whole node with at least 128gb ram
+#$ -pe omp 4
+
+
+module load miniconda
+conda activate /projectnb/tianlabdl/jalido/sbrnet_proj/.direnv
+# speficy the directory to save data, the number of data pairs, and the sbr range
+python /projectnb/tianlabdl/jalido/sbrnet_proj/sbrnet_core/synthetic_data/main.py \
+    --out_dir "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/test_argparse/" \
+    --lower_sbr 1.1 \
+    --upper_sbr 1.2 \
+    --N 100 \

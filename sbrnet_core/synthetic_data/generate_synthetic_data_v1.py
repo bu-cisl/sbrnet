@@ -13,6 +13,8 @@ from sbrnet_core.utils import (
     sbrnet_utils,
 )
 
+NUM_SLICES = 24  # number of slices in the refocus volume
+
 logger = logging.getLogger(__name__)
 
 
@@ -32,7 +34,7 @@ def process_single_iteration(i, config):
     mla_apodize_path = config["mla_apodize_path"]
     MLA_AP = full_read_tiff(mla_apodize_path)
 
-    out_folder = config["out_path"]
+    out_folder = config["out_dir"]
     out_stack_folder = os.path.join(out_folder, "stack")
     out_rfv_folder = os.path.join(out_folder, "rfv")
     # out_gt_folder = os.path.join(out_folder, "gt")
@@ -51,9 +53,7 @@ def process_single_iteration(i, config):
         fs_meas, bg_meas, sbr, bg_mean
     )
     stack = sbrnet_utils.crop_views(synthetic_measurement)
-    rfv = sbrnet_utils.lf_refocus_volume(
-        stack, config["num_slices"], config["num_slices"] // 2 + 1
-    )
+    rfv = sbrnet_utils.lf_refocus_volume(stack, NUM_SLICES, NUM_SLICES // 2 + 1)
 
     out_stack_path = os.path.join(out_stack_folder, f"meas_{i}.tiff")
     out_rfv_path = os.path.join(out_rfv_folder, f"meas_{i}.tiff")
@@ -61,9 +61,9 @@ def process_single_iteration(i, config):
 
     write_tiff(stack, out_stack_path)
     write_tiff(rfv, out_rfv_path)
-    write_tiff(
-        gt, out_gt_path
-    )  # remove this line if you don't want to save the ground truth
+    # write_tiff(
+    #     gt, out_gt_path
+    # )  # remove this line if you don't want to save the ground truth
 
     rowdata = pd.DataFrame(
         {
