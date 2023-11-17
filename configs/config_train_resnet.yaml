@@ -1,0 +1,31 @@
+# paths
+dataset_pq: "/projectnb/tianlabdl/shared_data/for_nicholas/dataset1/updated_metadata.pq"
+model_dir: "/projectnb/tianlabdl/nrabines/sbrnet/trained_models/"
+
+# training hyperparameters
+train_split: 0.8
+batch_size: 16
+learning_rate: 0.001
+epochs: 20000
+backbone: "resnet"
+resnet_channels: 48
+weight_init: "kaiming_normal"
+random_seed: 42
+optimizer: "adam"
+criterion_name: "bce_with_logits"
+use_amp: True
+lr_scheduler: "cosine_annealing"
+cosine_annealing_T_max: 30
+
+# resnet model hyperparameters
+num_gt_layers: 24
+num_lf_views: 9
+num_rfv_layers: 24
+num_resblocks: 20
+patch_size: 224
+
+# calibrated parameters for poisson-gaussian noise model
+A_STD: 5.7092e-5
+A_MEAN: 1.49e-4
+B_STD: 2.7754e-6
+B_MEAN: 5.41e-6

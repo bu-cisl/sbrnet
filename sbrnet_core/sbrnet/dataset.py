@@ -1,145 +1,165 @@
+# Importing modules
 import os
-import torch
+from functools import cached_property, cache
+from typing import Tuple
+from pandas import DataFrame, read_parquet
 import numpy as np
+import torch
+import zarr
+from tifffile import imread, TiffFile
 from torch.utils.data import Dataset
-from tifffile import imread
-
-# import skimage.io as io
-# from tifffile import imread
 
 
-# calibrated parameters for poisson gaussian noise model
-# cite
-A_STD = 5.7092e-5
-A_MEAN = 1.49e-4
-B_STD = 2.7754e-6
-B_MEAN = 5.41e-6
-
-
+# Creating CustomDataset Class
 class CustomDataset(Dataset):
-    def __init__(self, folder):
+    """
+    Custom dataset class for handling image datasets consisting of a stack of lightfield views, a refocused volume, 
+    and a ground truth target. Class reads data from file paths specified in a DataFrame.
+    """
+    def __init__(self, df_path: str):
+        """
+        Initialize the CustomDataset object.
+
+        Args:
+            df_path (str): Path to a DataFrame in parquet format containing file paths to image data.
+        """
         super(CustomDataset, self).__init__()
-        self.directory = folder
+        self.df = read_parquet(df_path)  # Read the DataFrame from the given path
 
     def __len__(self):
-        data_dir = os.path.join(self.directory, "rfvbg")  # bg refers to with background
-        return len(
-            [
-                name
-                for name in os.listdir(data_dir)
-                if os.path.isfile(os.path.join(data_dir, name))
-            ]
-        )
+        """ Return the number of items in the dataset. """
+        return len(self.df)
 
-    def __getitem__(self, index):
-        stack = imread(
-            os.path.join(self.directory, f"stackbg/meas_{index}.tiff")
-        ).astype(np.float32)
-        stack = (stack - stack.min()) / (stack.max() - stack.min())
+    def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """General getitem function for sbrnet-related datasets. require the stack of lightfield views,
+          and the refocused volume as inputs. and the the ground truth target.
+
+        Args:
+            index (int): Index of the data item to retrieve. Note input measurement data is stored in format 
+            of meas_{index}.tiff and output is stored in the format of gt_vol_{index}.tiff
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: A tuple containing stack, rfv, and gt data
+            all as normalized 32-bit float torch tensors to the [0, 1] range.
+        """
+
+        # Load and normalize the stack images from file path
+        stack = imread(self.df["stack_path"].iloc[index]).astype(np.float32) / 255
         stack = torch.from_numpy(stack)
 
-        rfv = imread(os.path.join(self.directory, f"rfvbg/meas_{index}.tiff")).astype(
-            np.float32
-        )
-
-        rfv = (rfv - rfv.min()) / (rfv.max() - rfv.min())
+        # Load and normalize the rfv image from file path
+        rfv = imread(self.df["rfv_path"].iloc[index]).astype(np.float32) / 255
         rfv = torch.from_numpy(rfv)
 
-        gt = imread(os.path.join(self.directory, f"gt/gt_vol_{index}.tiff")).astype(
-            np.float32
-        )
-        gt = (gt - gt.min()) / (gt.max() - gt.min())
+        # Load and normalize gt images from file path
+        gt = imread(self.df["gt_path"].iloc[index]).astype(np.float32) / 255
         gt = torch.from_numpy(gt)
 
         return stack, rfv, gt
 
 
-class MySubset(Dataset):
-    def __init__(self, dataset: Dataset, is_val: bool):
-        """Dataset class to include Poisson-Gaussian noise.
+# Creating ZarrData Class
+class ZarrData:
+    """
+    A class for efficient data access and loading using Zarr designed to work with image data stored in TIFF format.
+    """
+    def __init__(self, df: DataFrame, datatype: str):
+        """
+        Initialize the ZarrData object.
 
         Args:
-            dataset (Dataset): the complete clean dataset
-            is_val (boolean): if true, the dataset is for validation, else for training.
-                              for validation, do not do any cropping
+            df (DataFrame): A pandas DataFrame containing file paths to image data.
+            datatype (str): Specifies the type of data to retrieve. Must be one of 'stack', 'rfv', 'gt'.
+        """
+        self.df = df
+        if datatype not in ["stack", "rfv", "gt"]:
+            raise ValueError("datatype must be one of stack, rfv, gt")
+        self.datatype = datatype
+        self.open_zarrs = []
+
+    # NOTE: ensure cache is larger than number of items
+    @cache
+    def __getitem__(self, index: int):
+        """
+        Retrieve the dataset item at the specified index using Zarr for efficient data loading.
+
+        Args:
+            index (int): Index of the data item to retrieve.
+
+        Returns:
+            The data item loaded as a Zarr array.
+        """
+        path = self.df[self.datatype + "_path"].iloc[index]
+        with TiffFile(path) as img:
+            return zarr.open(img.aszarr())
+        
+        
+# Creating PatchDataset Class
+class PatchDataset(Dataset):
+    """
+    A dataset class for handling patch-based data, useful for training on cropped portions of images.
+    """
+    def __init__(self, dataset: Dataset, df_path: str, patch_size: int):
+        """
+        Initialize the PatchDataset object for handling patch data (cropping).
+
+        Args:
+            dataset (Dataset): The dataset to use, typically a train split after applying a random split.
+            df_path (str): Path to a DataFrame in parquet format.
+            patch_size (int): Size of the patches to be cropped from the dataset.
         """
         self.dataset = dataset
-        self.is_val = is_val
+        self.df = read_parquet(df_path)
+        self.patch_size = patch_size
 
-    def __getitem__(self, idx):
-        patch_size = 224
+    @cached_property
+    def stack(self) -> ZarrData:
+        """Cached property to access stack data as ZarrData."""
+        return ZarrData(self.df, "stack")
 
-        aa = torch.randn(1) * A_STD + A_MEAN
-        bb = torch.randn(1) * B_STD + B_MEAN
+    @cached_property
+    def rfv(self) -> ZarrData:
+        """ Cached property to access refocused volume data as ZarrData. """
+        return ZarrData(self.df, "rfv")
 
-        if self.is_val:
-            stack, rfv, gt = self.dataset[idx]
-            stack += torch.sqrt(aa * stack + bb) * torch.randn(stack.shape)
-            rfv += torch.sqrt(aa * rfv + bb) * torch.randn(rfv.shape) / 3
-            return stack, rfv, gt
-        else:
-            stack, rfv, gt = self.dataset.__getitem__(idx)
-            dim = stack.shape
-            a = torch.randint(0, dim[1] - patch_size, (1,))
-            b = torch.randint(0, dim[2] - patch_size, (1,))
+    @cached_property
+    def gt(self) -> ZarrData:
+        """Cached property to access ground truth data as ZarrData. """
+        return ZarrData(self.df, "gt")
 
-            stack = stack[:, a : a + patch_size, b : b + patch_size]
-            stack += torch.sqrt(aa * stack + bb) * torch.randn(stack.shape)
-            rfv = rfv[:, a : a + patch_size, b : b + patch_size]
-            rfv += torch.sqrt(aa * rfv + bb) * torch.randn(rfv.shape) / 3
-            return stack, rfv, gt[:, a : a + patch_size, b : b + patch_size]
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Retrieves a random patch of the data with size patch_size.
 
-    def __len__(self):
-        return len(self.dataset)
+        Args:
+            idx (int): Index of the data.
 
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: A tuple containing a patch of the stack data,
+            refocused volume, and ground truth, all as torch tensors.
+        """
+        # # Retrieve the data as Zarr arrays and sample a patch from data
+        # Courtesy of Mitchell Gilmore mgilm0re@bu.edu
+        stack = self.stack[idx]
+        rfv = self.rfv[idx]
+        gt = self.gt[idx]
 
-class ValidationDataset(Dataset):
-    def __init__(self, folder) -> None:
-        super(ValidationDataset).__init__()
-        self.directory = folder
-        stack_folder = os.path.join(self.directory, "stackbg")
-        rfv_folder = os.path.join(self.directory, "rfvbg")
-        gt_folder = os.path.join(self.directory, "gt")
+        # Uniformly sample a patch
+        # Randomly select starting row and col index for patch within the bounds of the image
+        row_start = torch.randint(0, stack.shape[-2] - self.patch_size, (1,))
+        col_start = torch.randint(0, stack.shape[-1] - self.patch_size, (1,))
 
-        # Get the number of files in each folder
-        stack_files = os.listdir(stack_folder)
-        rfv_files = os.listdir(rfv_folder)
-        gt_files = os.listdir(gt_folder)
+        # Create a slice object for rows and columns, defining the range of the patch.
+        row_slice = slice(row_start, row_start + self.patch_size)
+        col_slice = slice(col_start, col_start + self.patch_size)
 
-        # Ensure all folders have the same number of files
-        assert (
-            len(stack_files) == len(rfv_files) == len(gt_files)
-        ), "Not all folders have the same number of files."
-
-        # You can also print the counts if needed
-        print(f"stackbg folder has {len(stack_files)} files.")
-        print(f"rfvbg folder has {len(rfv_files)} files.")
-        print(f"gt folder has {len(gt_files)} files")
-
-    def __len__(self) -> int:
-        data_dir = os.path.join(self.directory, "rfvbg")  # bg refers to with background
-        return sum(1 for entry in os.scandir(data_dir) if entry.is_file())
-
-    def __getitem__(self, index):
-        stack = torch.from_numpy(
-            imread(os.path.join(self.directory, f"stackbg/meas_{index}.tiff")).astype(
-                np.float32
-            )
-            / 255
-        )
-
-        rfv = torch.from_numpy(
-            imread(os.path.join(self.directory, f"rfvbg/meas_{index}.tiff")).astype(
-                np.float32
-            )
-            / 255
-        )
-
-        gt = torch.from_numpy(
-            imread(os.path.join(self.directory, f"gt/gt_vol_{index}.tiff")).astype(
-                np.float32
-            )
-            / 255
-        )
+        # Extract patch from stack, rfv, gt and normalize its values to the range [0, 1].
+        stack = torch.from_numpy(stack[:, row_slice, col_slice].astype(np.float32) / 255)
+        rfv = torch.from_numpy(rfv[:, row_slice, col_slice].astype(np.float32) / 255)
+        gt = torch.from_numpy(gt[:, row_slice, col_slice].astype(np.float32) / 255)
 
         return stack, rfv, gt
+
+    def __len__(self):
+        """ Return the number of items in the dataset. """
+        return len(self.dataset)

@@ -1,0 +1,16 @@
+lower_sbr: 1.1
+upper_sbr: 3.0
+
+N: 500
+num_slices: 24
+
+# Keep as true for this package. False doesn't work yet. nevertheless, using ray is much faster, of course.
+use_ray: True
+
+out_path: "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/training_data/dataset1/"
+gt_path: "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/gts/composite/"
+
+psf_path: "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/cm2v2/z_uninterpolated_PSF.tif"
+lenslet_apodize_path: "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/cm2v2/lensletapodize.tiff"
+mla_apodize_path: "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/cm2v2/mlaapodize.tiff"
+value_path: "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/valuenoise/"

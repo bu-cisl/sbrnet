@@ -177,3 +177,5 @@ messroom/
 .venv/
 .direnv/
 .vscode/
+
+trained_models/
