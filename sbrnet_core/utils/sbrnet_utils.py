@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Tuple
+from typing import Tuple, List
 from skimage.feature import peak_local_max
 from sbrnet_core.utils import (
     linear_normalize,
@@ -53,19 +53,22 @@ def load_psf(path: str) -> np.ndarray:
     return normalize_psf_power(linear_normalize(read_tiff(path)))
 
 
-def crop_views(im: np.ndarray, crop_size: int = 512) -> np.ndarray:
+def crop_views(
+    im: np.ndarray, view_list: List[int] = list(range(10)), crop_size: int = 512
+) -> np.ndarray:
+    # Your code here
     """takes a 2076x 3088 CM2v2 image and crops it from left to right starting at the top
 
     Args:
         im (np.ndarray): the 2076x3088 image
+        view_list (List[int], optional): list of views to crop. reading order.
         crop_size (int): side length of the square crop
-        num_views (int): number of views (3x3) lens array
     Returns:
         np.ndarray: [NUM_VIEWS, crop_size, crop_size]
     """
-    stack = np.zeros((NUM_VIEWS, crop_size, crop_size))
-    for i, point in enumerate(FOCUS_LOC):
-        x, y = point
+    stack = np.zeros((len(view_list), crop_size, crop_size))
+    for i, view_index in enumerate(view_list):
+        x, y = FOCUS_LOC[view_index]
         x_min = x - crop_size // 2
         x_max = x + crop_size // 2
         y_min = y - crop_size // 2
