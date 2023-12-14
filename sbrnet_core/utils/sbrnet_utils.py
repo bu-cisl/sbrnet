@@ -1,30 +1,13 @@
 import numpy as np
 from typing import Tuple, List
 from skimage.feature import peak_local_max
+from sbrnet_core.synthetic_data.constants import CM2_SIZE, FOCUS_LOC, NUM_VIEWS
 from sbrnet_core.utils import (
     linear_normalize,
     read_tiff,
     uint8_to_float,
     normalize_psf_power,
     shift_array,
-)
-
-
-# Constants
-CM2_SIZE = [2076, 3088]
-NUM_VIEWS = 9
-FOCUS_LOC = np.array(
-    [
-        [406, 909],
-        [407, 1545],
-        [405, 2175],
-        [1037, 911],
-        [1037, 1544],
-        [1037, 2176],
-        [1675, 911],
-        [1675, 1543],
-        [1675, 2173],
-    ]
 )
 
 
@@ -53,22 +36,19 @@ def load_psf(path: str) -> np.ndarray:
     return normalize_psf_power(linear_normalize(read_tiff(path)))
 
 
-def crop_views(
-    im: np.ndarray, view_list: List[int] = list(range(10)), crop_size: int = 512
-) -> np.ndarray:
+def crop_views(im: np.ndarray, crop_size: int = 512) -> np.ndarray:
     # Your code here
     """takes a 2076x 3088 CM2v2 image and crops it from left to right starting at the top
 
     Args:
         im (np.ndarray): the 2076x3088 image
-        view_list (List[int], optional): list of views to crop. reading order.
         crop_size (int): side length of the square crop
     Returns:
         np.ndarray: [NUM_VIEWS, crop_size, crop_size]
     """
-    stack = np.zeros((len(view_list), crop_size, crop_size))
-    for i, view_index in enumerate(view_list):
-        x, y = FOCUS_LOC[view_index]
+    stack = np.zeros((NUM_VIEWS, crop_size, crop_size))
+    for i, point in enumerate(FOCUS_LOC):
+        x, y = point
         x_min = x - crop_size // 2
         x_max = x + crop_size // 2
         y_min = y - crop_size // 2
@@ -89,7 +69,7 @@ def get_coord_max(im: np.ndarray) -> np.ndarray:
         np.ndarray: _description_
     """
     fixed_meas = im.copy()
-    fixed_meas[im <= 0.01] = 0
+    fixed_meas[im <= 0.25] = 0
     return peak_local_max(fixed_meas, min_distance=5)
 
 
@@ -103,7 +83,7 @@ def get_meas_mean(im: np.ndarray) -> np.float32:
         np.float32: average of all the peaks of the signal
     """
     # remove noisy background that may contribute to the peak finding
-    im[im < 0.03] = 0
+    # im[im < 0.25] = 0
     coords = get_coord_max(im)
 
     # Step 1: Extract pixel values for the coordinates
@@ -220,3 +200,32 @@ def lf_refocus_volume(
         rfv[z, :, :] = lf_refocus_step(lf=lf, shift=ii - max_shift + 1)
 
     return linear_normalize(rfv)
+
+
+def zero_slices_not_in_list(arr, indices_to_keep):
+    """
+    Zero out slices in a 3D array along the first axis (c-axis) that are not in the specified list of indices.
+
+    Parameters:
+    - arr (numpy.ndarray): The 3D array with shape (c, h, w) where c is the number of slices along the c-axis,
+                          and h, w are the height and width of each slice.
+    - indices_to_keep (list): A list of integers representing the indices along the c-axis that should be retained.
+                              Slices corresponding to indices not in this list will be set to zero.
+
+    Returns:
+    numpy.ndarray: A modified array where slices not indexed in the provided list are set to zero.
+
+    Example:
+    >>> c, h, w = 3, 4, 5
+    >>> array = np.random.rand(c, h, w)
+    >>> indices_to_keep = [0, 2]
+    >>> result_array = zero_slices_not_in_list(array, indices_to_keep)
+    >>> print(result_array)
+    """
+    # Create a boolean mask where True corresponds to indices to keep
+    mask = np.isin(np.arange(arr.shape[0]), indices_to_keep)
+
+    # Use the mask to zero out slices not in the list
+    arr[~mask, :, :] = 0
+
+    return arr

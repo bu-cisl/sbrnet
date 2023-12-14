@@ -82,6 +82,15 @@ def write_tiff(x: np.ndarray, path: str) -> None:
     x = (255 * (linear_normalize(x))).astype("uint8")
     imwrite(path, x)
 
+def write_tiff16(x: np.ndarray, path: str) -> None:
+    """write a numpy array to a tiff file
+
+    Args:
+        x (np.ndarray): the numpy array you want to save
+    """
+    x = (0xFFFF * (linear_normalize(x))).astype("uint16")
+    imwrite(path, x)
+
 
 def linear_normalize(x: np.ndarray) -> np.ndarray:
     """linearly normalizes the array

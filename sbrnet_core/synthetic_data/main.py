@@ -71,19 +71,19 @@ if __name__ == "__main__":
     parser.add_argument(
         "--psf_path",
         type=str,
-        default="/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/cm2v2/z_uninterpolated_PSF.tif",
+        default="/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/cm2v2/cm2v2psf.tif",
         help="path of psf",
     )
     parser.add_argument(
         "--lenslet_apodize_path",
         type=str,
-        default="/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/cm2v2/lensletapodize.tiff",
+        default="/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/cm2v2/lensletapodize.tif",
         help="path of lenslet apodization function",
     )
     parser.add_argument(
         "--mla_apodize_path",
         type=str,
-        default="/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/cm2v2/mlaapodize.tiff",
+        default="/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/cm2v2/mlaapodize.tif",
         help="path of mla apodization function",
     )
     parser.add_argument(
@@ -91,6 +91,12 @@ if __name__ == "__main__":
         type=str,
         default="/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/valuenoise/",
         help="folder of value noise samples",
+    )
+    parser.add_argument(
+        "--view_ind",
+        type=int,
+        help="view combination index for object in constants.py",
+        required=True,
     )
 
     # Parse the arguments
