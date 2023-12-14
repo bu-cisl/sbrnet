@@ -60,14 +60,16 @@ class ResConnection(Sequential):
 
 
 # ResNet backbone
-class ResBlock(ResConnection):
+class ResBlock(Sequential):
     def __init__(self, channels: int) -> None:
         super(ResBlock, self).__init__(
-            nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(channels),
-            nn.ReLU(True),
-            nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(channels),
+            ResConnection(
+                nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False),
+                nn.ReLU(True),
+                nn.BatchNorm2d(channels),
+                nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False),
+            ),
         )
 
 
@@ -89,5 +91,6 @@ class ResNetCM2NetBlock(Sequential):
             ResConnection(
                 *(ResBlock(channels=outchannels * 2) for _ in range(numblocks)),
             ),
+            nn.BatchNorm2d(outchannels * 2),
             nn.Conv2d(outchannels * 2, outchannels * 2, kernel_size=3, padding=1),
         )
