@@ -156,6 +156,13 @@ if __name__ == "__main__":
         default=5.41e-6,
         help="Mean of B for poisson-gaussian noise model.",
     )
+    parser.add_argument(
+        "--scattering",
+        type=str,
+        required=True,
+        choices=["scat", "free"],
+        help="whether to use scattering or free space data.",
+    )
 
     # Parse the arguments
     args = parser.parse_args()

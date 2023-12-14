@@ -11,9 +11,10 @@ from torch.utils.data import Dataset
 
 
 class CustomDataset(Dataset):
-    def __init__(self, df_path: str):
+    def __init__(self, config: dict):
         super(CustomDataset, self).__init__()
-        self.df = read_parquet(df_path)
+        self.df = read_parquet(config["dataset_pq"])
+        self.scattering = config["scattering"]
 
     def __len__(self):
         return len(self.df)
@@ -32,54 +33,68 @@ class CustomDataset(Dataset):
             Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: your data in torch tensor form normalized to [0,1] with 32bit float.
         """
 
-        stack = imread(self.df["stack_path"].iloc[index]).astype(np.float32) / 255
+        stack = (
+            imread(self.df[f"stack_{self.scattering}_path"].iloc[index]).astype(
+                np.float32
+            )
+            / 0xFFFF
+        )
         stack = torch.from_numpy(stack)
 
-        rfv = imread(self.df["rfv_path"].iloc[index]).astype(np.float32) / 255
+        rfv = (
+            imread(self.df[f"rfv_{self.scattering}_path"].iloc[index]).astype(
+                np.float32
+            )
+            / 0xFFFF
+        )
         rfv = torch.from_numpy(rfv)
 
-        gt = imread(self.df["gt_path"].iloc[index]).astype(np.float32) / 255
+        gt = imread(self.df["gt_path"].iloc[index]).astype(np.float32) / 0xFFFF
         gt = torch.from_numpy(gt)
 
         return stack, rfv, gt
 
 
 class ZarrData:
-    def __init__(self, df: DataFrame, datatype: str):
+    def __init__(self, df: DataFrame, datatype: str, scattering: str):
         self.df = df
 
         if datatype not in ["stack", "rfv", "gt"]:
             raise ValueError("datatype must be one of stack, rfv, gt")
 
         self.datatype = datatype
+        self.scattering = scattering
         self.open_zarrs = []
 
     # NOTE: ensure cache is larger than number of items
     @cache
     def __getitem__(self, index: int):
-        path = self.df[self.datatype + "_path"].iloc[index]
+        path = self.df[self.datatype + f"_{self.scattering}_path"].iloc[index]
         with TiffFile(path) as img:
             return zarr.open(img.aszarr())
 
 
 class PatchDataset(Dataset):
-    def __init__(self, dataset: Dataset, df_path: str, patch_size: int):
+    def __init__(self, dataset: Dataset, config: dict):
         """Dataset class for patch data (cropping).
 
         Args:
             dataset (Dataset): the train split dataset after torch.utils.data.randomsplit for valid and train
         """
         self.dataset = dataset
-        self.df = read_parquet(df_path)
-        self.patch_size = patch_size
+        self.df = read_parquet(config["dataset_pq"])
+        self.patch_size = config["patch_size"]
+        self.scattering = config[
+            "scattering"
+        ]  # whether the data is free space or scattering
 
     @cached_property
     def stack(self) -> ZarrData:
-        return ZarrData(self.df, "stack")
+        return ZarrData(self.df, "stack", self.scattering)
 
     @cached_property
     def rfv(self) -> ZarrData:
-        return ZarrData(self.df, "rfv")
+        return ZarrData(self.df, "rfv", self.scattering)
 
     @cached_property
     def gt(self) -> ZarrData:
@@ -111,10 +126,10 @@ class PatchDataset(Dataset):
         col_slice = slice(col_start, col_start + self.patch_size)
 
         stack = torch.from_numpy(
-            stack[:, row_slice, col_slice].astype(np.float32) / 255
+            stack[:, row_slice, col_slice].astype(np.float32) / 0xFFFF
         )
-        rfv = torch.from_numpy(rfv[:, row_slice, col_slice].astype(np.float32) / 255)
-        gt = torch.from_numpy(gt[:, row_slice, col_slice].astype(np.float32) / 255)
+        rfv = torch.from_numpy(rfv[:, row_slice, col_slice].astype(np.float32) / 0xFFFF)
+        gt = torch.from_numpy(gt[:, row_slice, col_slice].astype(np.float32) / 0xFFFF)
 
         return stack, rfv, gt
 

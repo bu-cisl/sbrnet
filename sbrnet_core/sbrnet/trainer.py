@@ -85,22 +85,21 @@ class Trainer:
             )
             return train_dataset, val_dataset
 
-        complete_dataset: Dataset = CustomDataset(self.config["dataset_pq"])
+        complete_dataset: Dataset = CustomDataset(self.config)
         split_ratio = self.config["train_split"]
         train_dataset, val_dataset = split_dataset(complete_dataset, split_ratio)
 
         # only train_dataset is a PatchDataset. val_dataset is full sized images.
         train_dataset = PatchDataset(
             dataset=train_dataset,
-            df_path=self.config["dataset_pq"],
-            patch_size=self.config["patch_size"],
+            config=self.config,
         )
 
         train_dataloader = DataLoader(
-            train_dataset, self.config.get("batch_size"), shuffle=True
+            train_dataset, self.config.get("batch_size"), shuffle=True, num_workers=4
         )
         val_dataloader = DataLoader(
-            val_dataset, self.config["batch_size"], shuffle=True
+            val_dataset, self.config["batch_size"], shuffle=True, num_workers=4
         )
 
         return train_dataloader, val_dataloader
