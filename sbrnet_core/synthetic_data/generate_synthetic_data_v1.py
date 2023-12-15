@@ -3,7 +3,7 @@ import os
 import random
 import pandas as pd
 import logging
-from sbrnet_core.synthetic_data.constants import NUM_SLICES, view_combos
+from sbrnet_core.utils.constants import NUM_SLICES, view_combos
 from sbrnet_core.utils import (
     normalize_psf_power,
     full_read_tiff,

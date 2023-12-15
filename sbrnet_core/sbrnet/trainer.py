@@ -15,6 +15,7 @@ from torch.utils.data import DataLoader, Dataset
 
 from sbrnet_core.sbrnet.dataset import CustomDataset, PatchDataset
 from sbrnet_core.sbrnet.noisemodel import PoissonGaussianNoiseModel
+from sbrnet_core.sbrnet.losses.pinball import PinballLoss
 
 now = datetime.datetime.now()
 
@@ -96,10 +97,18 @@ class Trainer:
         )
 
         train_dataloader = DataLoader(
-            train_dataset, self.config.get("batch_size"), shuffle=True, num_workers=4
+            train_dataset,
+            self.config.get("batch_size"),
+            shuffle=True,
+            num_workers=4,
+            pin_memory=True,
         )
         val_dataloader = DataLoader(
-            val_dataset, self.config["batch_size"], shuffle=True, num_workers=4
+            val_dataset,
+            self.config["batch_size"],
+            shuffle=True,
+            num_workers=4,
+            pin_memory=True,
         )
 
         return train_dataloader, val_dataloader

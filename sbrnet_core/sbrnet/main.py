@@ -50,6 +50,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model_dir", type=str, required=True, help="Directory to save trained models."
     )
+    parser.add_argument(
+        "--scattering",
+        type=str,
+        required=True,
+        choices=["scat", "free"],
+        help="whether to use scattering or free space data.",
+    )
 
     # training stuff
     parser.add_argument(
@@ -130,6 +137,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--patch_size", type=int, default=224, help="Size of the patch."
     )
+    parser.add_argument(
+        "--num_head_layers",
+        type=int,
+        default=3,
+        help="number of conv layers for the head.",
+    )
 
     # calibrated parameters for poisson-gaussian noise model
     parser.add_argument(
@@ -155,13 +168,6 @@ if __name__ == "__main__":
         type=float,
         default=5.41e-6,
         help="Mean of B for poisson-gaussian noise model.",
-    )
-    parser.add_argument(
-        "--scattering",
-        type=str,
-        required=True,
-        choices=["scat", "free"],
-        help="whether to use scattering or free space data.",
     )
 
     # Parse the arguments

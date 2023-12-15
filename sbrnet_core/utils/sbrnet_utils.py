@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Tuple, List
 from skimage.feature import peak_local_max
-from sbrnet_core.synthetic_data.constants import CM2_SIZE, FOCUS_LOC, NUM_VIEWS
+from sbrnet_core.utils.constants import CM2_SIZE, FOCUS_LOC, NUM_VIEWS
 from sbrnet_core.utils import (
     linear_normalize,
     read_tiff,
