@@ -11,7 +11,78 @@ from sbrnet_core.utils.constants import view_combos
 RSQRT2 = torch.sqrt(torch.tensor(0.5)).item()
 
 
-class SBRNet(Module):
+class SimpleLayer(Sequential):
+    def __init__(self, config):
+        super(SimpleLayer, self).__init__(
+            nn.Conv2d(
+                config.get("num_gt_layers") * 2,
+                config.get("num_gt_layers"),
+                kernel_size=3,
+                padding=1,
+            ),
+        )
+
+
+class QuantileLayer(nn.Module):
+    def __init__(self, config):
+        super(QuantileLayer, self).__init__()
+        self.expansion = nn.Conv2d(
+            config.get("num_gt_layers") * 2,
+            config.get("num_gt_layers") * 2 * 3,  # 3: lower, upper and point
+            kernel_size=3,
+            padding=1,
+        )
+        self.multihead = nn.Sequential(
+            *[
+                nn.Sequential(
+                    nn.Conv2d(
+                        config.get("num_gt_layers") * 2 * 3,
+                        config.get("num_gt_layers") * 2 * 3,
+                        kernel_size=3,
+                        padding=1,
+                        groups=3,
+                    ),
+                    nn.ReLU(),
+                )
+                for _ in range(config.get("num_head_layers") - 1)
+            ]
+        )
+
+        self.contraction = nn.Conv2d(
+            config.get("num_gt_layers") * 2 * 3,
+            config.get("num_gt_layers") * 3,
+            kernel_size=3,
+            padding=1,
+        )
+
+    def forward(self, x):
+        x = self.expansion(x)
+        x = self.multihead(x)
+        x = self.contraction(x)
+        return x
+
+
+class LastLayer(nn.Module):
+    def __init__(self, config):
+        super(LastLayer, self).__init__()
+
+        self.use_quantile_layer = config.get("use_quantile_layer", True)
+
+        if self.use_quantile_layer:
+            self.layer = QuantileLayer(config)
+        else:
+            self.layer = SimpleLayer(config)
+
+    def forward(self, x):
+        return self.layer(x)
+
+
+class SBRNet(Sequential):
+    def __init__(self, config):
+        super(SBRNet, self).__init__(SBRNetTrunk(config), LastLayer(config))
+
+
+class SBRNetTrunk(Module):
     def __init__(self, config) -> None:
         super().__init__()
         self.config = config
@@ -25,13 +96,7 @@ class SBRNet(Module):
             raise ValueError(
                 f"Unknown backbone: {config['backbone']}. Only 'resnet' is supported."
             )
-        
-        self.conv_layers_with_relu = nn.Sequential(*[
-            nn.Conv2d(config.get("num_gt_layers")*2, config.get("num_gt_layers")*2, kernel_size=3, padding=1),
-            nn.ReLU()
-            for _ in range(config.get("num_head_layers")-1)
-        ])
-        
+
         self.end_conv: Module = nn.Conv2d(
             config.get("num_gt_layers") * 2,
             config.get("num_gt_layers"),
@@ -58,8 +123,9 @@ class SBRNet(Module):
         self.rfv_branch.apply(init_fn)
 
     def forward(self, lf_view_stack: Tensor, rfv: Tensor) -> Tensor:
-        return (self.view_synthesis_branch(lf_view_stack) + self.rfv_branch(rfv)) * RSQRT2
-        
+        return (
+            self.view_synthesis_branch(lf_view_stack) + self.rfv_branch(rfv)
+        ) * RSQRT2
 
 
 class ResConnection(Sequential):
@@ -83,9 +149,8 @@ class ResBlock(Sequential):
 
 class ResNetCM2NetBlock(Sequential):
     def __init__(self, config, branch: str) -> None:
-
         df = read_parquet(config["dataset_pq"])
-        
+
         if branch == "view_synthesis":
             inchannels = df.iloc[0].num_views
         elif branch == "refinement":

@@ -56,20 +56,20 @@ class CustomDataset(Dataset):
 
 
 class ZarrData:
-    def __init__(self, df: DataFrame, datatype: str, scattering: str):
+    def __init__(self, df: DataFrame, datatype: str, pattern: str):
         self.df = df
 
         if datatype not in ["stack", "rfv", "gt"]:
             raise ValueError("datatype must be one of stack, rfv, gt")
 
         self.datatype = datatype
-        self.scattering = scattering
+        self.pattern = pattern
         self.open_zarrs = []
 
     # NOTE: ensure cache is larger than number of items
     @cache
     def __getitem__(self, index: int):
-        path = self.df[self.datatype + f"_{self.scattering}_path"].iloc[index]
+        path = self.df[self.datatype + self.pattern].iloc[index]
         with TiffFile(path) as img:
             return zarr.open(img.aszarr())
 
@@ -90,15 +90,15 @@ class PatchDataset(Dataset):
 
     @cached_property
     def stack(self) -> ZarrData:
-        return ZarrData(self.df, "stack", self.scattering)
+        return ZarrData(self.df, "stack", pattern=f"_{self.scattering}_path")
 
     @cached_property
     def rfv(self) -> ZarrData:
-        return ZarrData(self.df, "rfv", self.scattering)
+        return ZarrData(self.df, "rfv", pattern=f"_{self.scattering}_path")
 
     @cached_property
     def gt(self) -> ZarrData:
-        return ZarrData(self.df, "gt")
+        return ZarrData(self.df, "gt", "_path")
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """retrieves a random patch of the data with size patch_size

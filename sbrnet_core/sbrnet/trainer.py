@@ -14,8 +14,8 @@ from torch.nn import Module
 from torch.utils.data import DataLoader, Dataset
 
 from sbrnet_core.sbrnet.dataset import CustomDataset, PatchDataset
-from sbrnet_core.sbrnet.noisemodel import PoissonGaussianNoiseModel
-from sbrnet_core.sbrnet.losses.pinball import PinballLoss
+from sbrnet_core.sbrnet.models.noisemodel import PoissonGaussianNoiseModel
+from sbrnet_core.sbrnet.losses.quantile_loss import QuantileLoss
 
 now = datetime.datetime.now()
 
@@ -63,17 +63,21 @@ class Trainer:
             GradScaler() if self.use_amp else None
         )  # Initialize the scaler if using AMP
 
-        # Initialize the loss criterion based on the configuration
-        if self.criterion_name == "bce_with_logits":
-            self.criterion = nn.BCEWithLogitsLoss()
-        elif self.criterion_name == "mse":
-            self.criterion = nn.MSELoss()
-        elif self.criterion_name == "mae":
-            self.criterion = nn.L1Loss()
+        # Initialize the loss criterion based on the config
+        if config["use_quantile_layer"]:
+            self.criterion = QuantileLoss(config)
         else:
-            print(
-                f"Unknown loss criterion: {self.criterion_name}. Using BCEWithLogitsLoss."
-            )
+            if config["criterion_name"] == "bce_with_logits":
+                self.criterion = nn.BCEWithLogitsLoss()
+            elif config["criterion_name"] == "mse":
+                self.criterion = nn.MSELoss()
+            elif config["criterion_name"] == "mae":
+                self.criterion = nn.L1Loss()
+            else:
+                print(
+                    f"Unknown loss criterion: {config['criterion_name']}. Using BCEWithLogitsLoss."
+                )
+                self.criterion = nn.BCEWithLogitsLoss()
         self.train_data_loader, self.val_data_loader = self._get_dataloaders()
 
     def _get_dataloaders(self) -> Tuple[DataLoader, DataLoader]:

@@ -3,7 +3,7 @@ import argparse
 from datetime import datetime
 from torch import compile
 
-from sbrnet_core.sbrnet.model import SBRNet
+from sbrnet_core.sbrnet.models.model import SBRNet
 
 # from sbrnet_core.config_loader import load_config # Not needed anymore
 from sbrnet_core.sbrnet.trainer import Trainer
@@ -53,7 +53,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--scattering",
         type=str,
-        required=True,
+        default="scat",
         choices=["scat", "free"],
         help="whether to use scattering or free space data.",
     )
@@ -120,6 +120,18 @@ if __name__ == "__main__":
         default=30,
         help="Maximum number of iterations for cosine annealing scheduler.",
     )
+    parser.add_argument(
+        "--q_lo",
+        type=float,
+        default=0.05,
+        help="lower quantile for quantile regression loss.",
+    )
+    parser.add_argument(
+        "--q_hi",
+        type=float,
+        default=0.95,
+        help="upper quantile for quantile regression loss.",
+    )
 
     # model stuff
     parser.add_argument(
@@ -136,6 +148,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--patch_size", type=int, default=224, help="Size of the patch."
+    )
+    parser.add_argument(
+        "--use_quantile_layer",
+        type=bool,
+        default=True,
+        help="whether to do UQ with conformal pred or not.",
     )
     parser.add_argument(
         "--num_head_layers",
