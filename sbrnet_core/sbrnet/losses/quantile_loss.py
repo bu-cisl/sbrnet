@@ -55,9 +55,9 @@ class QuantileLoss(nn.Module):
 
     def forward(self, pred, target):
         loss = (
-            self.q_lo_loss(pred[self.slice_q_lo, :, :], target)
-            + self.q_hi_loss(pred[self.slice_q_hi, :, :], target)
-            + self.point_loss(pred[self.slice_point, :, :], target)
+            self.q_lo_loss(pred[:, self.slice_q_lo, :, :], target)
+            + self.q_hi_loss(pred[:, self.slice_q_hi, :, :], target)
+            + self.point_loss(pred[:, self.slice_point, :, :], target)
         )
 
         return loss

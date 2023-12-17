@@ -11,16 +11,18 @@ from sbrnet_core.utils.constants import view_combos
 RSQRT2 = torch.sqrt(torch.tensor(0.5)).item()
 
 
-class SimpleLayer(Sequential):
+class SimpleLayer(nn.Module):
     def __init__(self, config):
-        super(SimpleLayer, self).__init__(
-            nn.Conv2d(
-                config.get("num_gt_layers") * 2,
-                config.get("num_gt_layers"),
-                kernel_size=3,
-                padding=1,
-            ),
-        )
+        super(SimpleLayer, self).__init__()
+        self.layer = nn.Sequential(*[nn.Conv2d(
+            config.get("num_gt_layers") * 2,
+            config.get("num_gt_layers"),
+            kernel_size=3,
+            padding=1,
+        ) for _ in range(config.get("num_head_layers"))])
+
+    def forward(self, x):
+        return self.layer(x)
 
 
 class QuantileLayer(nn.Module):
@@ -44,7 +46,7 @@ class QuantileLayer(nn.Module):
                     ),
                     nn.ReLU(),
                 )
-                for _ in range(config.get("num_head_layers") - 1)
+                for _ in range(config.get("num_head_layers") - 2)
             ]
         )
 
@@ -77,9 +79,17 @@ class LastLayer(nn.Module):
         return self.layer(x)
 
 
-class SBRNet(Sequential):
-    def __init__(self, config):
-        super(SBRNet, self).__init__(SBRNetTrunk(config), LastLayer(config))
+# class SBRNet(Sequential):
+#     def __init__(self, config):
+#         super(SBRNet, self).__init__(SBRNetTrunk(config), LastLayer(config))
+class SBRNet(nn.Module):
+    def __init__(self, config: dict):
+        super(SBRNet, self).__init__()
+        self.config = config
+        self.trunk = SBRNetTrunk(config)
+        self.last_layer = LastLayer(config)
+    def forward(self, lf_view_stack: Tensor, rfv: Tensor) -> Tensor:
+        return self.last_layer(self.trunk(lf_view_stack, rfv))
 
 
 class SBRNetTrunk(Module):
@@ -168,3 +178,31 @@ class ResNetCM2NetBlock(Sequential):
             nn.BatchNorm2d(outchannels * 2),
             nn.Conv2d(outchannels * 2, outchannels * 2, kernel_size=3, padding=1),
         )
+
+# debugging
+if __name__ == "__main__":
+    config = {
+        "backbone": "resnet",
+        "num_gt_layers": 24,
+        "num_rfv_layers": 24,
+        "num_resblocks": 2,
+        "num_head_layers": 2,
+        "weight_init": "kaiming_normal",
+        "use_quantile_layer": True,
+        "dataset_pq": "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/training_data/UQ/3/metadata.pq",
+    }
+    stack = torch.randn(1, 2, 32, 32)
+    rfv = torch.randn(1, 24, 32, 32)
+    model = SBRNet(config)
+    out = model(stack, rfv)
+
+    slice_q_lo = slice(0, config["num_gt_layers"])
+    slice_q_hi = slice(config["num_gt_layers"], config["num_gt_layers"] * 2)
+    slice_point = slice(config["num_gt_layers"] * 2, None)
+
+    from sbrnet_core.sbrnet.losses.quantile_loss import PinballLoss
+    q_lo_loss = PinballLoss(quantile=0.10, reduction="mean")
+    print("SKice", slice_q_lo)
+    print(out[:,slice_q_lo, :, :].shape, rfv.shape)
+    a = q_lo_loss(out[:,slice_q_lo, :, :], rfv)
+    

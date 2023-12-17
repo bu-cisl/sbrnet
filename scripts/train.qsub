@@ -35,4 +35,4 @@ conda activate /projectnb/tianlabdl/jalido/sbrnet_proj/.direnv
 python /projectnb/tianlabdl/jalido/sbrnet_proj/sbrnet_core/sbrnet/main.py \
   --dataset_pq "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/training_data/UQ/3/metadata.pq" \
   --model_dir "/projectnb/tianlabdl/jalido/sbrnet_proj/trained_models/" \
-  --batch_size 20 \
+  --batch_size 16 \
