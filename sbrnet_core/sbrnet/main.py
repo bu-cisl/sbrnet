@@ -111,8 +111,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--lr_scheduler",
         type=str,
-        default="cosine_annealing",
+        default="cosine_annealing_with_warm_restarts",
         help="Learning rate scheduler type.",
+    )
+    parser.add_argument(
+        "--weight_decay",
+        type=str,
+        default="0.001",
+        help="network weight decay regularization parameter.",
     )
     parser.add_argument(
         "--cosine_annealing_T_max",
@@ -161,6 +167,13 @@ if __name__ == "__main__":
         default=3,
         help="number of conv layers for the head.",
     )
+    parser.add_argument(
+        "--view_ind",
+        type=int,
+        default=1,
+        help="view combo index  from constants.py",
+    )
+
 
     # calibrated parameters for poisson-gaussian noise model
     parser.add_argument(

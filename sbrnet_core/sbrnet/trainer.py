@@ -128,10 +128,14 @@ class Trainer:
             optimizer = optim.Adam(
                 self.model.parameters(),
                 lr=self.learning_rate,
+                weight_decay=self.config.get("weight_decay", 0.001),
             )
         elif self.optimizer_name == "sgd":
             optimizer = optim.SGD(
-                self.model.parameters(), lr=self.learning_rate, momentum=0.9
+                self.model.parameters(),
+                lr=self.learning_rate,
+                momentum=0.9,
+                weight_decay=self.config.get("weight_decay", 0.001),
             )
         else:
             print(f"Unknown optimizer: {self.optimizer_name}. Using Adam.")
@@ -141,6 +145,10 @@ class Trainer:
     def _initialize_lr_scheduler(self, optimizer):
         if self.lr_scheduler_name == "cosine_annealing":
             scheduler = lr_scheduler.CosineAnnealingLR(
+                optimizer, T_max=self.config["cosine_annealing_T_max"]
+            )
+        elif self.lr_scheduler_name == "cosine_annealing_with_warm_restarts":
+            scheduler = lr_scheduler.CosineAnnealingWarmRestarts(
                 optimizer, T_max=self.config["cosine_annealing_T_max"]
             )
         elif self.lr_scheduler_name == "step_lr":
@@ -163,7 +171,7 @@ class Trainer:
         return scheduler
 
     def train(self):
-        model_name = f"sbrnet_{timestamp}.pt"
+        model_name = f"sbrnet_view_{self.config['view_ind']}_{timestamp}.pt"
         self.model.to(self.device)
         self.noise_model.to(self.device)
         self._set_random_seed()
