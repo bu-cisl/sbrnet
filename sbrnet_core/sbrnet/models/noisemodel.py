@@ -3,6 +3,7 @@ from functools import cached_property
 import torch
 from torch import Tensor
 from torch.nn import Module
+from pandas import read_parquet
 
 
 class PoissonGaussianNoiseModel(Module):
@@ -10,7 +11,8 @@ class PoissonGaussianNoiseModel(Module):
 
     def __init__(self, config: dict):
         super().__init__()
-        self.num_views = config["num_lf_views"]
+        df = read_parquet(config["dataset_pq"])
+        self.num_views = df.iloc[0].num_views
         self.a_mean = config.get("A_MEAN")
         self.b_mean = config.get("B_MEAN")
 
