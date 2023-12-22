@@ -104,14 +104,14 @@ class Trainer:
             train_dataset,
             self.config.get("batch_size"),
             shuffle=True,
-            num_workers=4,
+            num_workers=3,
             pin_memory=True,
         )
         val_dataloader = DataLoader(
             val_dataset,
             self.config["batch_size"],
             shuffle=True,
-            num_workers=4,
+            num_workers=3,
             pin_memory=True,
         )
 
@@ -149,7 +149,7 @@ class Trainer:
             )
         elif self.lr_scheduler_name == "cosine_annealing_with_warm_restarts":
             scheduler = lr_scheduler.CosineAnnealingWarmRestarts(
-                optimizer, T_max=self.config["cosine_annealing_T_max"]
+                optimizer, T_0=self.config["cosine_annealing_T_max"]
             )
         elif self.lr_scheduler_name == "step_lr":
             # StepLR scheduler
@@ -171,7 +171,23 @@ class Trainer:
         return scheduler
 
     def train(self):
-        model_name = f"sbrnet_view_{self.config['view_ind']}_{timestamp}.pt"
+        model_name = f"sbrnet_view_{self.config['view_ind']}_v0.pt"
+        model_save_path = os.path.join(self.model_dir, model_name)
+
+        # Check if the path already exists and make a new version path to save
+        while os.path.exists(model_save_path):
+            base_name, ext = os.path.splitext(model_name)
+            version_str = base_name.split("_")[-1]  # Extract the version string
+            if version_str.startswith("v") and version_str[1:].isdigit():
+                version = int(version_str[1:])
+
+            version += 1
+
+            model_name = (
+                f"sbrnet_view_{self.config['view_ind']}_v{version}.pt"
+            )
+            model_save_path = os.path.join(self.model_dir, model_name)
+
         self.model.to(self.device)
         self.noise_model.to(self.device)
         self._set_random_seed()
@@ -244,7 +260,7 @@ class Trainer:
                 }
 
                 save_state.update(self.config)
-                model_save_path = os.path.join(self.model_dir, model_name)
+
                 torch.save(save_state, model_save_path)
                 logger.info("Model saved at epoch {}".format(epoch + 1))
 
