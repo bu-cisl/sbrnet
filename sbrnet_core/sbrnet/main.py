@@ -117,13 +117,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--weight_decay",
         type=str,
-        default="0.001",
+        default=0.001,
         help="network weight decay regularization parameter.",
     )
     parser.add_argument(
         "--cosine_annealing_T_max",
         type=int,
-        default=30,
+        default=100,
         help="Maximum number of iterations for cosine annealing scheduler.",
     )
     parser.add_argument(
@@ -144,13 +144,16 @@ if __name__ == "__main__":
         "--num_gt_layers", type=int, default=24, help="Number of ground truth layers."
     )
     parser.add_argument(
-        "--num_lf_views", type=int, default=9, help="Number of light field views."
+        "--num_lf_views",
+        type=int,
+        default=9,
+        help="Number of light field views. Not being used in code though.",
     )
     parser.add_argument(
         "--num_rfv_layers", type=int, default=24, help="Number of RFV layers."
     )
     parser.add_argument(
-        "--num_resblocks", type=int, default=20, help="Number of residual blocks."
+        "--num_resblocks", type=int, default=15, help="Number of residual blocks."
     )
     parser.add_argument(
         "--patch_size", type=int, default=224, help="Size of the patch."
@@ -173,7 +176,6 @@ if __name__ == "__main__":
         default=1,
         help="view combo index  from constants.py",
     )
-
 
     # calibrated parameters for poisson-gaussian noise model
     parser.add_argument(
