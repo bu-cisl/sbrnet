@@ -2,6 +2,8 @@ from typing import Tuple
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torch.nn import Module
+import os
+import multiprocessing
 
 
 def algorithm(
@@ -14,32 +16,35 @@ def algorithm(
     params: dict,
 ) -> torch.Tensor:
     lamb = lamb_0
-    UCB = torch.ones(len(lamb))
-
-    while torch.any(UCB > alpha):
-        lamb -= d_lamb * (UCB > alpha)
+    UCB = torch.zeros(len(lamb),device='cuda')
+    while torch.any(UCB < alpha):
+        lamb -= d_lamb * (UCB <= alpha)
         L = calc_all_L(cal_data=cal_data, model=model, lamb=lamb, params=params)
-        UCB = calc_UCB(L=L, delta=delta)
-    lamb = lamb + d_lamb
+        UCB = calc_UCB(L=L, delta=delta, N=len(cal_data))
+        print("lambdas: ", lamb)
+        print("UCB: ", UCB)
+        print("------------------")
+    return lamb + d_lamb
 
 
-def calc_UCB(L: torch.Tensor, delta: float) -> torch.Tensor:
-    """_summary_
+def calc_UCB(L: torch.Tensor, delta: float, N: int) -> torch.Tensor:
+    """upper confidence bound hoeffding 
 
     Args:
         L (torch.Tensor): size (num_batches, num_gt_layers)
         delta (torch.float): float between 0 and 1
+        N: number of samples
 
     Returns:
         torch.Tensor: size of num_gt_layers
     """
     return torch.mean(L, dim=0) + torch.sqrt(
-        1 / (2 * L.shape[0]) * torch.log(1 / torch.tensor(delta))
+        1 / (2 * N) * torch.log(1 / torch.tensor(delta))
     )
 
 
 def calc_all_L(cal_data: Dataset, model, lamb, params: dict) -> torch.Tensor:
-    """_summary_
+    """table of Ls. includes size of dataset in the summary statistics since i divide by N in the L calculation
 
     Args:
         cal_data (Dataset): _description_
@@ -50,8 +55,8 @@ def calc_all_L(cal_data: Dataset, model, lamb, params: dict) -> torch.Tensor:
     Returns:
         torch.Tensor: size (num_batches, num_gt_layers)
     """
-    dataloader = DataLoader(cal_data, batch_size=16, shuffle=False, pin_memory=True)
-    L_table = torch.empty(len(dataloader), params["num_gt_layers"])
+    dataloader = DataLoader(cal_data, batch_size=32, shuffle=False, pin_memory=True)
+    L_table = torch.empty(len(dataloader), params["num_gt_layers"]).cuda()
     for i, (stack, rfv, gt) in enumerate(dataloader):
         stack = stack.cuda()
         rfv = rfv.cuda()
@@ -85,6 +90,7 @@ def calc_one_L(
         torch.Tensor: size of num_gt_layers
     """
     q_lo, q_hi, f = get_preds(model=model, stack=stack, rfv=rfv, params=params)
+    # q_lo, q_hi, f = q_lo/q_hi.max(), q_hi/q_hi.max(), f/q_hi.max()
     low_T_lambda, high_T_lambda = form_T_lambda(f, q_lo, q_hi, lamb)
 
     num_gt_layers = gt.size(1)
@@ -95,14 +101,17 @@ def calc_one_L(
         low_T_lambda_layer = low_T_lambda[:, layer_idx, :, :]
         high_T_lambda_layer = high_T_lambda[:, layer_idx, :, :]
 
+        gt_layer = gt_layer / high_T_lambda_layer.max()
+
         num_elements_between = torch.sum(
-            (gt_layer >= low_T_lambda_layer) & (gt_layer <= high_T_lambda_layer)
+            (gt_layer >= low_T_lambda_layer) & (gt_layer < high_T_lambda_layer)
         )
         total_elements = gt_layer.numel()
         L = 1 - num_elements_between / total_elements
         L_values.append(L)
 
     return torch.stack(L_values)
+
 
 
 def form_T_lambda(
@@ -147,10 +156,9 @@ def get_preds(
         out = model(stack, rfv)
         q_lo = torch.sigmoid(out[:, slice_q_lo, :, :])
         q_hi = torch.sigmoid(out[:, slice_q_hi, :, :])
-        f = out[:, slice_point, :, :]
+        f = torch.sigmoid(out[:, slice_point, :, :])
     return q_lo, q_hi, f
 
-
-if __name__ == "__main__":
-    
-    lambdas = algorithm(cal_data=None, model=None, alpha=0.05, delta=0.05, lamb_0=None, d_lamb=0.1, params=None)
+# if __name__ == "__main__":
+#     params = None
+#     labdas = algorithm(cal_data=cal_data, model=model, alpha=0.1, delta=0.1, lamb_0=lamb_0, d_lamb=0.1, params=params)

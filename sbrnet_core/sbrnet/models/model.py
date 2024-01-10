@@ -1,3 +1,4 @@
+import logging
 from pandas import read_parquet
 import torch
 import torch.nn as nn
@@ -9,17 +10,26 @@ from torch.nn import Module, Conv2d, Sequential
 from sbrnet_core.utils.constants import view_combos
 
 RSQRT2 = torch.sqrt(torch.tensor(0.5)).item()
+logger = logging.getLogger(__name__)
 
 
 class SimpleLayer(nn.Module):
     def __init__(self, config):
         super(SimpleLayer, self).__init__()
-        self.layer = nn.Sequential(*[nn.Conv2d(
-            config.get("num_gt_layers") * 2,
-            config.get("num_gt_layers"),
-            kernel_size=3,
-            padding=1,
-        ) for _ in range(config.get("num_head_layers"))])
+        self.layer = nn.Sequential(*[
+            nn.Conv2d(
+                config.get("num_gt_layers") * 2,
+                config.get("num_gt_layers") * 2,
+                kernel_size=3,
+                padding=1,
+            ) if _ < config.get("num_head_layers") - 1 else
+            nn.Conv2d(
+                config.get("num_gt_layers") * 2,
+                config.get("num_gt_layers"),
+                kernel_size=3,
+                padding=1,
+            ) for _ in range(config.get("num_head_layers"))
+        ])
 
     def forward(self, x):
         return self.layer(x)
@@ -68,12 +78,14 @@ class LastLayer(nn.Module):
     def __init__(self, config):
         super(LastLayer, self).__init__()
 
-        self.use_quantile_layer = config.get("use_quantile_layer", True)
+        self.last_layer = config.get("last_layer", "quantile_heads")
 
-        if self.use_quantile_layer:
+        if self.last_layer == "quantile_heads":
             self.layer = QuantileLayer(config)
+            logger.info("Using quantile heads")
         else:
             self.layer = SimpleLayer(config)
+            logger.info("Using simple single head")
 
     def forward(self, x):
         return self.layer(x)
@@ -107,12 +119,12 @@ class SBRNetTrunk(Module):
                 f"Unknown backbone: {config['backbone']}. Only 'resnet' is supported."
             )
 
-        self.end_conv: Module = nn.Conv2d(
-            config.get("num_gt_layers") * 2,
-            config.get("num_gt_layers"),
-            kernel_size=3,
-            padding=1,
-        )
+        # self.end_conv: Module = nn.Conv2d(
+        #     config.get("num_gt_layers") * 2,
+        #     config.get("num_gt_layers"),
+        #     kernel_size=3,
+        #     padding=1,
+        # )
         self.init_convs()
 
     def init_convs(self) -> None:
@@ -156,6 +168,16 @@ class ResBlock(Sequential):
             ),
         )
 
+# class ResBlock(ResConnection):
+#     def __init__(self, channels: int) -> None:
+#         super(ResBlock, self).__init__(
+#             nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False),
+#             nn.BatchNorm2d(channels),
+#             nn.ReLU(True),
+#             nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False),
+#             nn.BatchNorm2d(channels),
+#         )
+
 
 class ResNetCM2NetBlock(Sequential):
     def __init__(self, config, branch: str) -> None:
@@ -188,10 +210,10 @@ if __name__ == "__main__":
         "num_resblocks": 2,
         "num_head_layers": 2,
         "weight_init": "kaiming_normal",
-        "use_quantile_layer": True,
-        "dataset_pq": "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/training_data/UQ/3/metadata.pq",
+        "last_layer": "simple",
+        "dataset_pq": "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/training_data/UQ/15/metadata.pq",
     }
-    stack = torch.randn(1, 2, 32, 32)
+    stack = torch.randn(1, 9, 32, 32)
     rfv = torch.randn(1, 24, 32, 32)
     model = SBRNet(config)
     out = model(stack, rfv)
@@ -206,3 +228,4 @@ if __name__ == "__main__":
     print(out[:,slice_q_lo, :, :].shape, rfv.shape)
     a = q_lo_loss(out[:,slice_q_lo, :, :], rfv)
     
+

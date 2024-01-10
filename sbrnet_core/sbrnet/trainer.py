@@ -52,7 +52,6 @@ class Trainer:
         self.use_amp = config.get("use_amp", False)
         self.optimizer_name = config.get("optimizer", "adam")
         self.lr_scheduler_name = config.get("lr_scheduler", "cosine_annealing")
-        self.criterion_name = config.get("loss_criterion", "bce_with_logits")
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         if not os.path.exists(self.model_dir):
@@ -64,7 +63,7 @@ class Trainer:
         )  # Initialize the scaler if using AMP
 
         # Initialize the loss criterion based on the config
-        if config["use_quantile_layer"]:
+        if config["last_layer"] == "quantile_heads":
             self.criterion = QuantileLoss(config)
         else:
             if config["criterion_name"] == "bce_with_logits":
@@ -171,6 +170,7 @@ class Trainer:
         return scheduler
 
     def train(self):
+        logger.info(f"View index: {self.config['view_ind']}")
         model_name = f"sbrnet_view_{self.config['view_ind']}_v0.pt"
         model_save_path = os.path.join(self.model_dir, model_name)
 
@@ -235,11 +235,13 @@ class Trainer:
                 f"Epoch [{epoch + 1}/{self.epochs}], Train Loss: {avg_train_loss}"
             )
 
+
             val_loss = self.validate()
             self.validation_losses.append(val_loss)
             logger.info(
                 f"Epoch [{epoch + 1}/{self.epochs}], Validation Loss: {val_loss}"
             )
+
 
             if self.lr_scheduler_name == "plateau":
                 scheduler.step(

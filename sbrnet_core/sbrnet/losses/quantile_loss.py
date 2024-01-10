@@ -36,6 +36,9 @@ class QuantileLoss(nn.Module):
 
         self.q_lo_loss = PinballLoss(quantile=params["q_lo"])
         self.q_hi_loss = PinballLoss(quantile=params["q_hi"])
+        self.point_weight = params["point_loss_weight"]
+        self.qlo_weight = params["qlo_weight"]
+        self.qhi_weight = params["qhi_weight"]
 
         # Initialize the point loss criterion based on the configuration
         if params["criterion_name"] == "bce_with_logits":
@@ -54,10 +57,13 @@ class QuantileLoss(nn.Module):
         self.slice_point = slice(params["num_gt_layers"] * 2, None)
 
     def forward(self, pred, target):
+        qlo_loss = self.q_lo_loss(torch.sigmoid(pred[:, self.slice_q_lo, :, :]), target)
+        point_pred_loss = self.point_loss(pred[:, self.slice_point, :, :], target)
+        qhi_loss = self.q_hi_loss(torch.sigmoid(pred[:, self.slice_q_hi, :, :]), target)
         loss = (
-            self.q_lo_loss(torch.sigmoid(pred[:, self.slice_q_lo, :, :]), target)
-            + self.q_hi_loss(torch.sigmoid(pred[:, self.slice_q_hi, :, :]), target)
-            + self.point_loss(pred[:, self.slice_point, :, :], target)
+            self.qlo_weight * qlo_loss
+            + self.qhi_weight * qhi_loss
+            + self.point_weight * point_pred_loss
         )
 
         return loss

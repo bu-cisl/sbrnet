@@ -19,15 +19,18 @@ logger = logging.getLogger(__name__)
 
 
 @ray.remote
-def process_single_iteration(i, config):
+def process_single_iteration(i, PSF, config, scatlen):
+    if config["mode"] == "test":
+        out_folder = os.path.join(config["out_dir"], f"test_{scatlen}")
+        i = i + 500  # hardcoding now but can fix later
+    else:
+        out_folder = config["out_dir"]
     view_combo_index = config["view_ind"] - 1
     view_list = view_combos[view_combo_index]
 
     low_sbr = config["lower_sbr"]
     upper_sbr = config["upper_sbr"]
 
-    psf_path = config["psf_path"]
-    PSF = normalize_psf_power(full_read_tiff(psf_path))
     gt_folder = config["gt_path"]
 
     value_folder = config["value_path"]
@@ -84,7 +87,7 @@ def process_single_iteration(i, config):
     #### for free space #####
 
     # write to folders
-    out_folder = config["out_dir"]
+
     out_stack_scat_folder = os.path.join(out_folder, "stack_scattering")
     out_rfv_scat_folder = os.path.join(out_folder, "rfv_scattering")
     out_stack_free_folder = os.path.join(out_folder, "stack_freespace")
@@ -104,7 +107,7 @@ def process_single_iteration(i, config):
         {
             "num_views": [len(view_list)],
             "view_combo": [view_list],
-            "psf_path": [psf_path],
+            # "psf_path": [psf_path],
             "lens_apodized_path": [lens_apodize_path],
             "mla_apodized_path": [mla_apodize_path],
             "gt_folder": [gt_folder],
@@ -123,30 +126,86 @@ def process_single_iteration(i, config):
 
 
 def make_synthetic_dataset(config: dict) -> None:
-    out_folder = config["out_dir"]
-    if not os.path.exists(out_folder):
-        os.makedirs(out_folder)
-    out_stack_folder = os.path.join(out_folder, "stack_scattering")
-    if not os.path.exists(out_stack_folder):
-        os.makedirs(out_stack_folder)
-    out_rfv_folder = os.path.join(out_folder, "rfv_scattering")
-    if not os.path.exists(out_rfv_folder):
-        os.makedirs(out_rfv_folder)
-    out_stack_folder = os.path.join(out_folder, "stack_freespace")
-    if not os.path.exists(out_stack_folder):
-        os.makedirs(out_stack_folder)
-    out_rfv_folder = os.path.join(out_folder, "rfv_freespace")
-    if not os.path.exists(out_rfv_folder):
-        os.makedirs(out_rfv_folder)
+    psf_path = config["psf_path"]
+    PSF = normalize_psf_power(full_read_tiff(psf_path))
 
+    # if config["use_ray"]:
+    #     # num_cpus for SCC--number of cores in omp instance
+
+    #     if config["test"]:
+    #         PSF = sbrnet_utils.attenuate_psf(PSF, config["scattering_length"])
+
+    #     ray.init(ignore_reinit_error=True, num_cpus=int(os.getenv("NSLOTS")))
+    #     ray.put(PSF)
+    #     futures = [
+    #         process_single_iteration.remote(i, PSF, config) for i in range(config["N"])
+    #     ]
+    #     results = ray.get(futures)
+    #     df = pd.concat(results, ignore_index=True, axis=0)
+    # # BUG: This is not working. The code below is not being executed
+    # else:
+    #     df = pd.DataFrame()
+    #     for i in range(config["N"]):
+    #         rowdata = process_single_iteration(i, config)  # Call the function directly
+    #         df = pd.concat([df, rowdata], ignore_index=True, axis=0)
+    out_folder = config["out_dir"]
     if config["use_ray"]:
         # num_cpus for SCC--number of cores in omp instance
         ray.init(ignore_reinit_error=True, num_cpus=int(os.getenv("NSLOTS")))
-        futures = [
-            process_single_iteration.remote(i, config) for i in range(config["N"])
-        ]
-        results = ray.get(futures)
-        df = pd.concat(results, ignore_index=True, axis=0)
+
+        if config["mode"] == "test":
+            all_df = []
+            for scatlen in range(100, 1100, 100):
+                out_folder = os.path.join(config["out_dir"], f"test_{scatlen}")
+                if not os.path.exists(out_folder):
+                    os.makedirs(out_folder)
+                out_stack_folder = os.path.join(out_folder, "stack_scattering")
+                if not os.path.exists(out_stack_folder):
+                    os.makedirs(out_stack_folder)
+                out_rfv_folder = os.path.join(out_folder, "rfv_scattering")
+                if not os.path.exists(out_rfv_folder):
+                    os.makedirs(out_rfv_folder)
+                out_stack_folder = os.path.join(out_folder, "stack_freespace")
+                if not os.path.exists(out_stack_folder):
+                    os.makedirs(out_stack_folder)
+                out_rfv_folder = os.path.join(out_folder, "rfv_freespace")
+                if not os.path.exists(out_rfv_folder):
+                    os.makedirs(out_rfv_folder)
+                PSF_atten = sbrnet_utils.attenuate_psf(
+                    PSF, scatlen, config["z_sampling"]
+                )
+                PSF_ref = ray.put(PSF_atten)
+                futures = [
+                    process_single_iteration.remote(i, PSF_ref, config, scatlen)
+                    for i in range(config["N"])
+                ]
+                results = ray.get(futures)
+                df = pd.concat(results, ignore_index=True, axis=0)
+                all_df.append(df)
+            all_df = pd.concat(all_df, ignore_index=True, axis=0)
+        else:
+            if not os.path.exists(out_folder):
+                os.makedirs(out_folder)
+            out_stack_folder = os.path.join(out_folder, "stack_scattering")
+            if not os.path.exists(out_stack_folder):
+                os.makedirs(out_stack_folder)
+            out_rfv_folder = os.path.join(out_folder, "rfv_scattering")
+            if not os.path.exists(out_rfv_folder):
+                os.makedirs(out_rfv_folder)
+            out_stack_folder = os.path.join(out_folder, "stack_freespace")
+            if not os.path.exists(out_stack_folder):
+                os.makedirs(out_stack_folder)
+            out_rfv_folder = os.path.join(out_folder, "rfv_freespace")
+            if not os.path.exists(out_rfv_folder):
+                os.makedirs(out_rfv_folder)
+            ray.put(PSF)
+            futures = [
+                process_single_iteration.remote(i, PSF, config, scatlen=None)
+                for i in range(config["N"])
+            ]
+            results = ray.get(futures)
+            all_df = pd.concat(results, ignore_index=True, axis=0)
+
     # BUG: This is not working. The code below is not being executed
     else:
         df = pd.DataFrame()
@@ -154,6 +213,10 @@ def make_synthetic_dataset(config: dict) -> None:
             rowdata = process_single_iteration(i, config)  # Call the function directly
             df = pd.concat([df, rowdata], ignore_index=True, axis=0)
 
-    df.to_parquet(
-        os.path.join(out_folder, "metadata.pq")
-    )  # save metadata about dataset in a parquet file
+    out_folder = config["out_dir"]
+    if config["mode"] == "test":
+        all_df.to_parquet(os.path.join(out_folder, "test_metadata.pq"))
+    else:
+        all_df.to_parquet(
+            os.path.join(out_folder, "metadata.pq")
+        )  # save metadata about dataset in a parquet file

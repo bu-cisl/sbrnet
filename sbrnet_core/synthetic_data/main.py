@@ -23,6 +23,9 @@ def main(args):
 
     logger.info("Starting synthetic data generation...")
     logger.info(f"Using ray: {config['use_ray']}")
+    logger.info(f"Generating {config['N']} pairs of synthetic data.")
+    logger.info("Mode: {}".format(config["mode"]))
+
     start_time = time.time()
     make_synthetic_dataset(config)
     logger.info("Synthetic data generation complete.")
@@ -35,7 +38,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Train SBRNet with command-line parameters."
     )
-
+    parser.add_argument(
+        "--mode", type=str, default="train", choices=["train","test"] ,help="train or test mode. test is with ls"
+    )
     parser.add_argument(
         "--out_dir",
         type=str,
@@ -50,6 +55,12 @@ if __name__ == "__main__":
         "--upper_sbr",
         type=float,
         help="upper bound for SBR",
+    )
+    parser.add_argument(
+        "--scattering_length", type=float, help="scattering length in microns"
+    )
+    parser.add_argument(
+        "--z_sampling", type=float, default=25, help="z discretization in microns"
     )
     parser.add_argument(
         "--N",

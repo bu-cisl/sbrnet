@@ -117,7 +117,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--weight_decay",
         type=str,
-        default=0.001,
+        default=0.0001,
         help="network weight decay regularization parameter.",
     )
     parser.add_argument(
@@ -137,6 +137,24 @@ if __name__ == "__main__":
         type=float,
         default=0.95,
         help="upper quantile for quantile regression loss.",
+    )
+    parser.add_argument(
+        "--qlo_weight",
+        type=float,
+        default=1,
+        help="weight for loss term for point prediction.",
+    )
+    parser.add_argument(
+        "--qhi_weight",
+        type=float,
+        default=1,
+        help="weight for loss term for point prediction.",
+    )
+    parser.add_argument(
+        "--point_loss_weight",
+        type=float,
+        default=1,
+        help="weight for loss term for point prediction.",
     )
 
     # model stuff
@@ -159,9 +177,9 @@ if __name__ == "__main__":
         "--patch_size", type=int, default=224, help="Size of the patch."
     )
     parser.add_argument(
-        "--use_quantile_layer",
-        type=bool,
-        default=True,
+        "--last_layer",
+        type=str,
+        default='quantile_heads',
         help="whether to do UQ with conformal pred or not.",
     )
     parser.add_argument(

@@ -229,3 +229,18 @@ def zero_slices_not_in_list(arr, indices_to_keep):
     arr[~mask, :, :] = 0
 
     return arr
+
+def attenuate_psf(PSF: np.ndarray, scattering_length: float, z_sampling: float) -> np.ndarray:
+    """_summary_
+
+    Args:
+        PSF (np.ndarray): z, x,y
+        scattering_length (float): in microns.
+
+    Returns:
+        np.ndarray: attenuated PSF
+    """
+    PSF_atten = PSF.copy()
+    for z in range(PSF.shape[0]):
+        PSF_atten[z, :, :] *= np.exp(-z*z_sampling / scattering_length)
+    return PSF_atten
