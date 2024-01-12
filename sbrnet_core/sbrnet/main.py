@@ -116,7 +116,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--weight_decay",
-        type=str,
+        type=float,
         default=0.0001,
         help="network weight decay regularization parameter.",
     )

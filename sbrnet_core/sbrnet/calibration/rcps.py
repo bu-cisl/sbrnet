@@ -2,8 +2,8 @@ from typing import Tuple
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torch.nn import Module
-import os
-import multiprocessing
+# import os
+# import multiprocessing
 
 
 def algorithm(
@@ -16,7 +16,7 @@ def algorithm(
     params: dict,
 ) -> torch.Tensor:
     lamb = lamb_0
-    UCB = torch.zeros(len(lamb),device='cuda')
+    UCB = torch.zeros(len(lamb), device='cuda')
     while torch.any(UCB < alpha):
         lamb -= d_lamb * (UCB <= alpha)
         L = calc_all_L(cal_data=cal_data, model=model, lamb=lamb, params=params)
@@ -55,7 +55,7 @@ def calc_all_L(cal_data: Dataset, model, lamb, params: dict) -> torch.Tensor:
     Returns:
         torch.Tensor: size (num_batches, num_gt_layers)
     """
-    dataloader = DataLoader(cal_data, batch_size=32, shuffle=False, pin_memory=True)
+    dataloader = DataLoader(cal_data, batch_size=12, shuffle=False, pin_memory=True)
     L_table = torch.empty(len(dataloader), params["num_gt_layers"]).cuda()
     for i, (stack, rfv, gt) in enumerate(dataloader):
         stack = stack.cuda()
@@ -101,7 +101,7 @@ def calc_one_L(
         low_T_lambda_layer = low_T_lambda[:, layer_idx, :, :]
         high_T_lambda_layer = high_T_lambda[:, layer_idx, :, :]
 
-        gt_layer = gt_layer / high_T_lambda_layer.max()
+        # gt_layer = gt_layer / high_T_lambda_layer.max()
 
         num_elements_between = torch.sum(
             (gt_layer >= low_T_lambda_layer) & (gt_layer < high_T_lambda_layer)
@@ -153,10 +153,11 @@ def get_preds(
     slice_point = slice(params["num_gt_layers"] * 2, None)
 
     with torch.no_grad():
-        out = model(stack, rfv)
-        q_lo = torch.sigmoid(out[:, slice_q_lo, :, :])
-        q_hi = torch.sigmoid(out[:, slice_q_hi, :, :])
-        f = torch.sigmoid(out[:, slice_point, :, :])
+        with torch.cuda.amp.autocast(enabled=True):
+            out = model(stack, rfv)
+            q_lo = torch.sigmoid(out[:, slice_q_lo, :, :])
+            q_hi = torch.sigmoid(out[:, slice_q_hi, :, :])
+            f = torch.sigmoid(out[:, slice_point, :, :])
     return q_lo, q_hi, f
 
 # if __name__ == "__main__":

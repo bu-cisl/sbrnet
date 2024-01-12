@@ -78,6 +78,7 @@ class Trainer:
                 )
                 self.criterion = nn.BCEWithLogitsLoss()
         self.train_data_loader, self.val_data_loader = self._get_dataloaders()
+        logger.info(f"Loss criterion: {self.criterion}")
 
     def _get_dataloaders(self) -> Tuple[DataLoader, DataLoader]:
         def split_dataset(dataset, split_ratio):
@@ -127,14 +128,14 @@ class Trainer:
             optimizer = optim.Adam(
                 self.model.parameters(),
                 lr=self.learning_rate,
-                weight_decay=self.config.get("weight_decay", 0.001),
+                weight_decay=self.config.get("weight_decay", 0.0001),
             )
         elif self.optimizer_name == "sgd":
             optimizer = optim.SGD(
                 self.model.parameters(),
                 lr=self.learning_rate,
                 momentum=0.9,
-                weight_decay=self.config.get("weight_decay", 0.001),
+                weight_decay=self.config.get("weight_decay", 0.0001),
             )
         else:
             print(f"Unknown optimizer: {self.optimizer_name}. Using Adam.")
@@ -187,7 +188,7 @@ class Trainer:
                 f"sbrnet_view_{self.config['view_ind']}_v{version}.pt"
             )
             model_save_path = os.path.join(self.model_dir, model_name)
-
+        logger.info(f"Model save path: {model_save_path}")
         self.model.to(self.device)
         self.noise_model.to(self.device)
         self._set_random_seed()
@@ -197,7 +198,7 @@ class Trainer:
         start_time = time.time()
 
         if self.use_amp:
-            print("Using mixed-precision training with AMP.")
+            logger.info("Using mixed-precision training with AMP.")
 
         for epoch in range(self.epochs):
             self.model.train()
@@ -214,7 +215,7 @@ class Trainer:
                 optimizer.zero_grad()
 
                 if self.use_amp:
-                    with autocast():
+                    with autocast(enabled=True):
                         output = self.model(lf_view_stack, rfv)
                         loss = self.criterion(output, gt)
                     self.scaler.scale(loss).backward()
@@ -225,6 +226,7 @@ class Trainer:
                     loss = self.criterion(output, gt)
                     loss.backward()
                     optimizer.step()
+
                 logger.debug(f"Epoch [{epoch + 1}/{self.epochs}], Loss: {loss.item()}")
 
                 total_loss += loss.item()
@@ -234,6 +236,7 @@ class Trainer:
             logger.info(
                 f"Epoch [{epoch + 1}/{self.epochs}], Train Loss: {avg_train_loss}"
             )
+            logger.info(f"Time elapsed: {time.time() - start_time} seconds")
 
 
             val_loss = self.validate()
@@ -241,6 +244,7 @@ class Trainer:
             logger.info(
                 f"Epoch [{epoch + 1}/{self.epochs}], Validation Loss: {val_loss}"
             )
+            logger.info(f"Time elapsed: {time.time() - start_time} seconds")
 
 
             if self.lr_scheduler_name == "plateau":
@@ -276,7 +280,9 @@ class Trainer:
                     rfv.to(self.device),
                     gt.to(self.device),
                 )
-                output = self.model(lf_view_stack, rfv)
-                loss = self.criterion(output, gt)
+                with autocast(enabled=self.use_amp):
+                    lf_view_stack, rfv = self.noise_model(lf_view_stack, rfv)
+                    output = self.model(lf_view_stack, rfv)
+                    loss = self.criterion(output, gt)
                 total_loss += loss.item()
         return total_loss / len(self.val_data_loader)
