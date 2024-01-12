@@ -11,8 +11,7 @@ class PoissonGaussianNoiseModel(Module):
 
     def __init__(self, config: dict):
         super().__init__()
-        df = read_parquet(config["dataset_pq"])
-        self.num_views = df.iloc[0].num_views
+        self.num_views = config.get("num_lf_views", 9)
         self.a_mean = config.get("A_MEAN")
         self.b_mean = config.get("B_MEAN")
 
@@ -36,13 +35,24 @@ class PoissonGaussianNoiseModel(Module):
 
         recip_sqrt_num_views = self.recip_sqrt_num_views.to(stack.device)
 
-        stack += torch.sqrt(
-            torch.clamp(self.a_mean * stack + self.b_mean, min=0)
-        ) * torch.randn(stack.shape).to(stack.device)
+        # stack += torch.sqrt(
+        #     torch.clamp(self.a_mean * stack + self.b_mean, min=0)
+        # ) * torch.randn(stack.shape).to(stack.device)
+
+        # rfv += (
+        #     torch.sqrt(torch.clamp(self.a_mean * rfv + self.b_mean, min=0))
+        #     * torch.randn(rfv.shape).to(rfv.device)
+        #     * recip_sqrt_num_views
+        # )
+
+        stack += torch.sqrt(self.a_mean * stack + self.b_mean) * torch.randn(
+            stack.shape
+        ).to(stack.device)
 
         rfv += (
-            torch.sqrt(torch.clamp(self.a_mean * rfv + self.b_mean, min=0))
+            torch.sqrt(self.a_mean * rfv + self.b_mean)
             * torch.randn(rfv.shape).to(rfv.device)
             * recip_sqrt_num_views
         )
+
         return stack, rfv
