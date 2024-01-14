@@ -47,7 +47,11 @@ class Trainer:
         self.model_dir = config["model_dir"]
         self.lowest_val_loss = float("inf")
         self.training_losses = []
+        self.qlo_training_losses = []
+        self.qhi_training_losses = []
         self.validation_losses = []
+        self.qlo_validation_losses = []
+        self.qhi_validation_losses = []
         self.random_seed = config.get("random_seed", None)
         self.use_amp = config.get("use_amp", False)
         self.optimizer_name = config.get("optimizer", "adam")
@@ -203,6 +207,8 @@ class Trainer:
         for epoch in range(self.epochs):
             self.model.train()
             total_loss = 0
+            total_qlo_loss = 0
+            total_qhi_loss = 0
             for lf_view_stack, rfv, gt in self.train_data_loader:
                 lf_view_stack, rfv, gt = (
                     lf_view_stack.to(self.device),
@@ -218,29 +224,49 @@ class Trainer:
                     with autocast(enabled=True):
                         output = self.model(lf_view_stack, rfv)
                         loss = self.criterion(output, gt)
-                    self.scaler.scale(loss).backward()
-                    self.scaler.step(optimizer)
-                    self.scaler.update()
+                    if isinstance(loss, tuple):
+                        loss_all = loss[0]
+                        self.scaler.scale(loss_all).backward()
+                        self.scaler.step(optimizer)
+                        self.scaler.update()
+                    else:
+                        self.scaler.scale(loss).backward()
+                        self.scaler.step(optimizer)
+                        self.scaler.update()
                 else:
                     output = self.model(lf_view_stack, rfv)
                     loss = self.criterion(output, gt)
-                    loss.backward()
+                    if isinstance(loss, tuple):
+                        loss_all = loss[0]
+                        loss_all.backward()
+                    else:
+                        loss.backward()
                     optimizer.step()
 
-                logger.debug(f"Epoch [{epoch + 1}/{self.epochs}], Loss: {loss.item()}")
 
-                total_loss += loss.item()
+                total_loss += loss_all.item()
+                total_qlo_loss += loss[1].item() if isinstance(loss, tuple) else 0
+                total_qhi_loss += loss[2].item() if isinstance(loss, tuple) else 0
 
             avg_train_loss = total_loss / len(self.train_data_loader)
+            avg_qlo_loss = total_qlo_loss / len(self.train_data_loader) if isinstance(loss, tuple) else 0
+            avg_qhi_loss = total_qhi_loss / len(self.train_data_loader) if isinstance(loss, tuple) else 0
             self.training_losses.append(avg_train_loss)
+            self.qlo_training_losses.append(avg_qlo_loss)
+            self.qhi_training_losses.append(avg_qhi_loss)
+
             logger.info(
                 f"Epoch [{epoch + 1}/{self.epochs}], Train Loss: {avg_train_loss}"
             )
             logger.info(f"Time elapsed: {time.time() - start_time} seconds")
 
 
-            val_loss = self.validate()
+            val_loss, val_qlo_loss, val_qhi_loss = self.validate()
+
             self.validation_losses.append(val_loss)
+            self.qlo_validation_losses.append(val_qlo_loss)
+            self.qhi_validation_losses.append(val_qhi_loss)
+
             logger.info(
                 f"Epoch [{epoch + 1}/{self.epochs}], Validation Loss: {val_loss}"
             )
@@ -262,6 +288,10 @@ class Trainer:
                     "optimizer_state_dict": optimizer.state_dict(),
                     "training_losses": self.training_losses,
                     "validation_losses": self.validation_losses,
+                    "q_lo_training_loss": self.qlo_training_losses,
+                    "q_lo_validation_loss": self.qlo_validation_losses,
+                    "q_hi_training_loss": self.qhi_training_losses,
+                    "q_hi_validation_loss": self.qhi_validation_losses,
                     "time_elapsed": time.time() - start_time,
                 }
 
@@ -273,6 +303,8 @@ class Trainer:
     def validate(self):
         self.model.eval()
         total_loss = 0
+        total_qlo_loss = 0
+        total_qhi_loss = 0
         with torch.no_grad():
             for lf_view_stack, rfv, gt in self.val_data_loader:
                 lf_view_stack, rfv, gt = (
@@ -284,5 +316,11 @@ class Trainer:
                     lf_view_stack, rfv = self.noise_model(lf_view_stack, rfv)
                     output = self.model(lf_view_stack, rfv)
                     loss = self.criterion(output, gt)
-                total_loss += loss.item()
-        return total_loss / len(self.val_data_loader)
+                if isinstance(loss, tuple):
+                    loss_all = loss[0]
+                    total_loss += loss_all.item()
+                else:
+                    total_loss += loss.item()
+                total_qhi_loss += loss[1].item() if isinstance(loss, tuple) else 0
+                total_qlo_loss += loss[2].item() if isinstance(loss, tuple) else 0
+        return total_loss / len(self.val_data_loader), total_qlo_loss / len(self.val_data_loader), total_qhi_loss / len(self.val_data_loader)

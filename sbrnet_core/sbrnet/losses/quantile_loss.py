@@ -3,7 +3,9 @@
 # pinball loss class
 import torch
 import torch.nn as nn
+import logging
 
+logger = logging.getLogger(__name__)
 
 # pinball loss class
 class PinballLoss:
@@ -12,6 +14,7 @@ class PinballLoss:
         assert 0 < self.quantile
         assert self.quantile < 1
         self.reduction = reduction
+        logger.info(f"Initialized PinballLoss with quantile {self.quantile}")
 
     def __call__(self, output, target):
         assert output.shape == target.shape
@@ -66,4 +69,4 @@ class QuantileLoss(nn.Module):
             + self.point_weight * point_pred_loss
         )
 
-        return loss
+        return loss, qlo_loss, qhi_loss, point_pred_loss
