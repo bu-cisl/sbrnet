@@ -7,7 +7,6 @@ import torch.nn.functional as F
 # types imports
 from torch import Tensor
 from torch.nn import Module, Conv2d, Sequential
-from sbrnet_core.utils.constants import view_combos
 
 RSQRT2 = torch.sqrt(torch.tensor(0.5)).item()
 logger = logging.getLogger(__name__)
@@ -42,12 +41,15 @@ class SimpleLayer(nn.Module):
 class QuantileLayer(nn.Module):
     def __init__(self, config):
         super(QuantileLayer, self).__init__()
+        # expand from the trunk to 3 heads, each head with (num_gt_layers * 2) channels
         self.expansion = nn.Conv2d(
             config.get("num_gt_layers") * 2,
-            config.get("num_gt_layers") * 2 * 3,  # 3: lower, upper and point
+            config.get("num_gt_layers") * 2 * 3,
             kernel_size=3,
             padding=1,
         )
+
+        #each head has their own group of conv kernels with groups=3
         self.multihead = nn.Sequential(
             *[
                 nn.Sequential(
@@ -60,20 +62,23 @@ class QuantileLayer(nn.Module):
                     ),
                     nn.ReLU(),
                 )
-                for _ in range(config.get("num_head_layers") - 2)
+                # minimum 2 layers for expansion and contraction. 
+                # any more would be here in the middle.
+                for _ in range(config.get("num_head_layers") - 2) 
             ]
         )
-
+        # single conv layer to shrink each head's (num_gt_layers * 2) channels 
+        # to (num_gt_layers) for the final reconstruction
         self.contraction = nn.Conv2d(
             config.get("num_gt_layers") * 2 * 3,
             config.get("num_gt_layers") * 3,
             kernel_size=3,
             padding=1,
-            groups=3
+            groups=3,
         )
 
     def forward(self, x):
-        x = F.relu(self.expansion(x),inplace=True)
+        x = self.expansion(x)
         x = self.multihead(x)
         x = self.contraction(x)
         return x
@@ -196,7 +201,7 @@ class ResNetCM2NetBlock(Sequential):
 
         numblocks = config["num_resblocks"]
         outchannels = config["num_gt_layers"]
-        # # mitchell's idea. 
+        # # mitchell's idea.
         # super(ResNetCM2NetBlock, self).__init__(
         #     nn.Conv2d(inchannels, outchannels * 2, kernel_size=3, padding=1),
         #     *(ResBlock(channels=outchannels * 2) for _ in range(numblocks)),
