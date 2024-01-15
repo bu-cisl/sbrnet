@@ -1,6 +1,11 @@
 # SBR-Net
 This repository contains the python implementations of the paper: **Robust single-shot 3D fluorescence imaging in scattering media with a simulator-trained neural network**. We provide a code in a python package, `sbrnet-core`, that contains functions for generating synthetic data and training models. 
 
+<p align="center">
+  <img src="overview.png">
+</p>
+
+
 ### Citation
 If you find this project useful in your research, please consider citing our paper:
 
