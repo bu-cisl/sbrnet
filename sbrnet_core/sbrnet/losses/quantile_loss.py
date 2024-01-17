@@ -4,6 +4,7 @@
 import torch
 import torch.nn as nn
 import logging
+from torch.nn.functional import relu
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,7 @@ class QuantileLoss(nn.Module):
         self.point_weight = params["point_loss_weight"]
         self.qlo_weight = params["qlo_weight"]
         self.qhi_weight = params["qhi_weight"]
+        self.output_activation = params["output_activation"]
 
         # Initialize the point loss criterion based on the configuration
         if params["criterion_name"] == "bce_with_logits":
@@ -59,10 +61,21 @@ class QuantileLoss(nn.Module):
         self.slice_q_hi = slice(params["num_gt_layers"], params["num_gt_layers"] * 2)
         self.slice_point = slice(params["num_gt_layers"] * 2, None)
 
+    def output_activation(self, x):
+        if self.output_activation == "sigmoid":
+            return torch.sigmoid(x) 
+        elif self.output_activation == "relu":
+            return relu(x,inplace=True)
+        elif self.output_activation == "none":
+            return x
+        else:
+            logger.info(f"Unknown output activation: {self.output_activation}. Using sigmoid.")
+            return torch.sigmoid(x)
+
     def forward(self, pred, target):
-        qlo_loss = self.q_lo_loss(torch.sigmoid(pred[:, self.slice_q_lo, :, :]), target)
+        qlo_loss = self.q_lo_loss(self.output_activation(pred[:, self.slice_q_lo, :, :]), target)
         point_pred_loss = self.point_loss(pred[:, self.slice_point, :, :], target)
-        qhi_loss = self.q_hi_loss(torch.sigmoid(pred[:, self.slice_q_hi, :, :]), target)
+        qhi_loss = self.q_hi_loss(self.output_activation(pred[:, self.slice_q_hi, :, :]), target)
         loss = (
             self.qlo_weight * qlo_loss
             + self.qhi_weight * qhi_loss
