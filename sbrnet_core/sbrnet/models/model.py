@@ -41,47 +41,122 @@ class SimpleLayer(nn.Module):
 class QuantileLayer(nn.Module):
     def __init__(self, config):
         super(QuantileLayer, self).__init__()
-        # expand from the trunk to 3 heads, each head with (num_gt_layers * 2) channels
-        self.expansion = nn.Conv2d(
-            config.get("num_gt_layers") * 2,
-            config.get("num_gt_layers") * 2 * 3,
-            kernel_size=3,
-            padding=1,
-        )
+        n_channels_middle = config.get("num_gt_layers") * 2
+        n_channels_out = config.get("num_gt_layers")
 
-        #each head has their own group of conv kernels with groups=3
-        self.multihead = nn.Sequential(
+        self.lower = nn.Sequential(
             *[
                 nn.Sequential(
                     nn.Conv2d(
-                        config.get("num_gt_layers") * 2 * 3,
-                        config.get("num_gt_layers") * 2 * 3,
+                        config.get("num_gt_layers") * 2,
+                        config.get("num_gt_layers") * 2,
                         kernel_size=3,
                         padding=1,
-                        groups=3,
                     ),
                     nn.ReLU(),
                 )
-                # minimum 2 layers for expansion and contraction. 
-                # any more would be here in the middle.
-                for _ in range(config.get("num_head_layers") - 2) 
-            ]
+
+                for _ in range(config.get("num_head_layers") - 1)
+            ],
+            nn.Conv2d(
+                config.get("num_gt_layers") * 2,
+                config.get("num_gt_layers"),
+                kernel_size=3,
+                padding=1,
+            ),
         )
-        # single conv layer to shrink each head's (num_gt_layers * 2) channels 
-        # to (num_gt_layers) for the final reconstruction
-        self.contraction = nn.Conv2d(
-            config.get("num_gt_layers") * 2 * 3,
-            config.get("num_gt_layers") * 3,
-            kernel_size=3,
-            padding=1,
-            groups=3,
+        self.prediction = nn.Sequential(
+            *[
+                nn.Sequential(
+                    nn.Conv2d(
+                        config.get("num_gt_layers") * 2,
+                        config.get("num_gt_layers") * 2,
+                        kernel_size=3,
+                        padding=1,
+                    ),
+                    nn.ReLU(),
+                )
+
+                for _ in range(config.get("num_head_layers") - 1)
+            ],
+            nn.Conv2d(
+                config.get("num_gt_layers") * 2,
+                config.get("num_gt_layers"),
+                kernel_size=3,
+                padding=1,
+            ),
+        )
+        self.upper = nn.Sequential(
+            *[
+                nn.Sequential(
+                    nn.Conv2d(
+                        config.get("num_gt_layers") * 2,
+                        config.get("num_gt_layers") * 2,
+                        kernel_size=3,
+                        padding=1,
+                    ),
+                    nn.ReLU(),
+                )
+
+                for _ in range(config.get("num_head_layers") - 1)
+            ],
+            nn.Conv2d(
+                config.get("num_gt_layers") * 2,
+                config.get("num_gt_layers"),
+                kernel_size=3,
+                padding=1,
+            ),
         )
 
     def forward(self, x):
-        x = self.expansion(x)
-        x = self.multihead(x)
-        x = self.contraction(x)
-        return x
+        return torch.cat([self.lower(x), self.prediction(x), self.upper(x)], dim=1)
+
+
+# class QuantileLayer(nn.Module):
+#     def __init__(self, config):
+#         super(QuantileLayer, self).__init__()
+#         # expand from the trunk to 3 heads, each head with (num_gt_layers * 2) channels
+#         self.expansion = nn.Conv2d(
+#             config.get("num_gt_layers") * 2,
+#             config.get("num_gt_layers") * 2 * 3,
+#             kernel_size=3,
+#             padding=1,
+#         )
+
+#         #each head has their own group of conv kernels with groups=3
+#         self.multihead = nn.Sequential(
+#             *[
+#                 nn.Sequential(
+#                     nn.Conv2d(
+#                         config.get("num_gt_layers") * 2 * 3,
+#                         config.get("num_gt_layers") * 2 * 3,
+#                         kernel_size=3,
+#                         padding=1,
+#                         groups=3,
+#                     ),
+#                     nn.ReLU(),
+#                 )
+#                 # minimum 2 layers for expansion and contraction.
+#                 # any more would be here in the middle.
+#                 for _ in range(config.get("num_head_layers") - 2)
+#             ]
+#         )
+#         # single conv layer to shrink each head's (num_gt_layers * 2) channels
+#         # to (num_gt_layers) for the final reconstruction
+#         self.contraction = nn.Conv2d(
+#             config.get("num_gt_layers") * 2 * 3,
+#             config.get("num_gt_layers") * 3,
+#             kernel_size=3,
+#             padding=1,
+#             groups=3,
+#         )
+
+#     def forward(self, x):
+#         x = self.expansion(x)
+#         x = self.multihead(x)
+#         # x = (self.multihead(x) + x) * RSQRT2
+#         x = self.contraction(x)
+#         return x
 
 
 class LastLayer(nn.Module):
@@ -226,13 +301,14 @@ if __name__ == "__main__":
         "num_resblocks": 2,
         "num_head_layers": 2,
         "weight_init": "kaiming_normal",
-        "last_layer": "simple",
+        "last_layer": "quantile_heads",
         "dataset_pq": "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/training_data/UQ/15/metadata.pq",
     }
     stack = torch.randn(1, 9, 32, 32)
     rfv = torch.randn(1, 24, 32, 32)
     model = SBRNet(config)
     out = model(stack, rfv)
+    print(out.shape)
 
     slice_q_lo = slice(0, config["num_gt_layers"])
     slice_q_hi = slice(config["num_gt_layers"], config["num_gt_layers"] * 2)
@@ -244,3 +320,4 @@ if __name__ == "__main__":
     print("SKice", slice_q_lo)
     print(out[:, slice_q_lo, :, :].shape, rfv.shape)
     a = q_lo_loss(out[:, slice_q_lo, :, :], rfv)
+    print(a)
