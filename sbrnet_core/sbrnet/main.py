@@ -24,6 +24,10 @@ def main(args):
     # Construct the configuration dictionary from the argparse namespace
     config = vars(args)
 
+    logger.info("Configuration:")
+    for key, value in config.items():
+        logger.info(f"{key}: {value}")
+
     model = compile(SBRNet(config))
 
     trainer = Trainer(model, config)
@@ -87,6 +91,12 @@ if __name__ == "__main__":
         help="Number of channels in resnet backbone.",
     )
     parser.add_argument(
+        "--resnext_cardinality",
+        type=int,
+        default=32,
+        help="cardinality in resnext backbone.",
+    )
+    parser.add_argument(
         "--weight_init",
         type=str,
         default="kaiming_normal",
@@ -101,6 +111,13 @@ if __name__ == "__main__":
         type=str,
         default="bce_with_logits",
         help="Criterion name for the loss function.",
+    )
+    parser.add_argument(
+        "--output_activation",
+        type=str,
+        default="sigmoid",
+        choices=["sigmoid", "relu", "none"],
+        help="output activation for quantile heads.",
     )
     parser.add_argument(
         "--use_amp",
@@ -179,7 +196,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--last_layer",
         type=str,
-        default='quantile_heads',
+        default="quantile_heads",
         help="whether to do UQ with conformal pred or not.",
     )
     parser.add_argument(

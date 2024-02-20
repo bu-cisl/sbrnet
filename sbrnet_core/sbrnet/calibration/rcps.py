@@ -1,9 +1,15 @@
 from typing import Tuple
+from venv import logger
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torch.nn import Module
+from torch.nn.functional import relu
+
 # import os
 # import multiprocessing
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def algorithm(
@@ -16,7 +22,7 @@ def algorithm(
     params: dict,
 ) -> torch.Tensor:
     lamb = lamb_0
-    UCB = torch.zeros(len(lamb), device='cuda')
+    UCB = torch.zeros(len(lamb), device="cuda")
     while torch.any(UCB < alpha):
         lamb -= d_lamb * (UCB <= alpha)
         L = calc_all_L(cal_data=cal_data, model=model, lamb=lamb, params=params)
@@ -28,7 +34,7 @@ def algorithm(
 
 
 def calc_UCB(L: torch.Tensor, delta: float, N: int) -> torch.Tensor:
-    """upper confidence bound hoeffding 
+    """upper confidence bound hoeffding
 
     Args:
         L (torch.Tensor): size (num_batches, num_gt_layers)
@@ -113,7 +119,6 @@ def calc_one_L(
     return torch.stack(L_values)
 
 
-
 def form_T_lambda(
     f: torch.Tensor, q_lo: torch.Tensor, q_hi: torch.Tensor, lamb: torch.Tensor
 ) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -148,6 +153,7 @@ def get_preds(
     Returns:
         Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: each of shape (batch_size, num_gt_layers, H, W)
     """
+    model.eval()
     slice_q_lo = slice(0, params["num_gt_layers"])
     slice_q_hi = slice(params["num_gt_layers"], params["num_gt_layers"] * 2)
     slice_point = slice(params["num_gt_layers"] * 2, None)
@@ -155,10 +161,25 @@ def get_preds(
     with torch.no_grad():
         with torch.cuda.amp.autocast(enabled=True):
             out = model(stack, rfv)
-            q_lo = torch.sigmoid(out[:, slice_q_lo, :, :])
-            q_hi = torch.sigmoid(out[:, slice_q_hi, :, :])
+            q_lo = output_activation(out[:, slice_q_lo, :, :], params)
+            q_hi = output_activation(out[:, slice_q_hi, :, :], params)
             f = torch.sigmoid(out[:, slice_point, :, :])
     return q_lo, q_hi, f
+
+
+def output_activation(x, config):
+    if config.get("output_activation") == "sigmoid":
+        return torch.sigmoid(x)
+    elif config.get("output_activation") == "relu":
+        return relu(x, inplace=False)
+    elif config.get("output_activation") == "none":
+        return x
+    else:
+        logger.info(
+            f"Unknown output activation: {config.get('output_activation')}. Using sigmoid."
+        )
+        return torch.sigmoid(x)
+
 
 # if __name__ == "__main__":
 #     params = None

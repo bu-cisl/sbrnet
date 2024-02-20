@@ -80,6 +80,13 @@ if __name__ == "__main__":
         help="folder of ground truths",
     )
     parser.add_argument(
+        "--gt_name_pattern",
+        type=str,
+        default="sim_gt_vol",
+        help="naming pattern for gt files",
+    )
+
+    parser.add_argument(
         "--psf_path",
         type=str,
         default="/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/cm2v2/cm2v2psf.tif",

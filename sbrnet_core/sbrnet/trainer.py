@@ -1,9 +1,11 @@
 import datetime
 import logging
 import os
+from pyexpat import model
 from typing import Tuple
 import time
 from pandas import read_parquet
+import numpy as np
 
 import torch
 import torch.nn as nn
@@ -16,6 +18,11 @@ from torch.utils.data import DataLoader, Dataset
 from sbrnet_core.sbrnet.dataset import CustomDataset, PatchDataset
 from sbrnet_core.sbrnet.models.noisemodel import PoissonGaussianNoiseModel
 from sbrnet_core.sbrnet.losses.quantile_loss import QuantileLoss
+from sbrnet_core.sbrnet.calibration.rcps import get_preds
+
+from matplotlib.pyplot import subplots
+import matplotlib.pyplot as plt
+
 
 now = datetime.datetime.now()
 
@@ -138,7 +145,7 @@ class Trainer:
             optimizer = optim.SGD(
                 self.model.parameters(),
                 lr=self.learning_rate,
-                momentum=0.9,
+                momentum=0.5,
                 weight_decay=self.config.get("weight_decay", 0.0001),
             )
         else:
@@ -188,11 +195,10 @@ class Trainer:
 
             version += 1
 
-            model_name = (
-                f"sbrnet_view_{self.config['view_ind']}_v{version}.pt"
-            )
-            model_save_path = os.path.join(self.model_dir, model_name)
+            model_name = f"sbrnet_view_{self.config['view_ind']}_v{version}"
+            model_save_path = os.path.join(self.model_dir, model_name + ".pt")
         logger.info(f"Model save path: {model_save_path}")
+        torch.save(self.config, model_save_path)
         self.model.to(self.device)
         self.noise_model.to(self.device)
         self._set_random_seed()
@@ -243,14 +249,21 @@ class Trainer:
                         loss.backward()
                     optimizer.step()
 
-
                 total_loss += loss_all.item()
                 total_qlo_loss += loss[1].item() if isinstance(loss, tuple) else 0
                 total_qhi_loss += loss[2].item() if isinstance(loss, tuple) else 0
 
             avg_train_loss = total_loss / len(self.train_data_loader)
-            avg_qlo_loss = total_qlo_loss / len(self.train_data_loader) if isinstance(loss, tuple) else 0
-            avg_qhi_loss = total_qhi_loss / len(self.train_data_loader) if isinstance(loss, tuple) else 0
+            avg_qlo_loss = (
+                total_qlo_loss / len(self.train_data_loader)
+                if isinstance(loss, tuple)
+                else 0
+            )
+            avg_qhi_loss = (
+                total_qhi_loss / len(self.train_data_loader)
+                if isinstance(loss, tuple)
+                else 0
+            )
             self.training_losses.append(avg_train_loss)
             self.qlo_training_losses.append(avg_qlo_loss)
             self.qhi_training_losses.append(avg_qhi_loss)
@@ -259,7 +272,6 @@ class Trainer:
                 f"Epoch [{epoch + 1}/{self.epochs}], Train Loss: {avg_train_loss}"
             )
             logger.info(f"Time elapsed: {time.time() - start_time} seconds")
-
 
             val_loss, val_qlo_loss, val_qhi_loss = self.validate()
 
@@ -271,7 +283,6 @@ class Trainer:
                 f"Epoch [{epoch + 1}/{self.epochs}], Validation Loss: {val_loss}"
             )
             logger.info(f"Time elapsed: {time.time() - start_time} seconds")
-
 
             if self.lr_scheduler_name == "plateau":
                 scheduler.step(
@@ -300,6 +311,50 @@ class Trainer:
                 torch.save(save_state, model_save_path)
                 logger.info("Model saved at epoch {}".format(epoch + 1))
 
+                # rough draft for saving a visualization of the model prediction. could be better.
+                cal_data = cal_data = CustomDataset(self.config)
+                stack, rfv, gt = cal_data[0]
+                qlo, qhi, f = get_preds(
+                    self.model,
+                    stack[None, :, :, :].to(self.device),
+                    rfv[None, :, :, :].to(self.device),
+                    self.config,
+                )
+                qlo, qhi, f = (
+                    qlo.cpu().numpy().squeeze(),
+                    qhi.cpu().numpy().squeeze(),
+                    f.cpu().numpy().squeeze(),
+                )
+
+                fig, axs = subplots(3, 1, figsize=(15, 15))
+                axs = axs.ravel()
+                q = 1
+                # im0 = axs[0].imshow(np.max(gt, axis=q))
+                # axs[0].set_title("Ground Truth")
+                # fig.colorbar(im0, ax=axs[0])
+
+                im1 = axs[0].imshow(np.max(qlo, axis=q))
+                axs[0].set_title("lower quantile")
+                fig.colorbar(im1, ax=axs[0])
+
+                im2 = axs[2].imshow(np.max(qhi, axis=q))
+                axs[2].set_title("upper quantile")
+                fig.colorbar(im2, ax=axs[2])
+
+                im3 = axs[1].imshow(np.max(f, axis=q))
+                axs[1].set_title("point pred")
+                fig.suptitle(f"epoch {epoch}")
+                fig.colorbar(im3, ax=axs[1])
+                fig_save_fol = (
+                    "/projectnb/tianlabdl/jalido/sbrnet_proj/training_visualization/"
+                )
+                fig_save_path = os.path.join(
+                    fig_save_fol, f"{model_name}.png"
+                )
+                fig.savefig(fig_save_path)
+                plt.close(fig)
+                
+
     def validate(self):
         self.model.eval()
         total_loss = 0
@@ -321,6 +376,10 @@ class Trainer:
                     total_loss += loss_all.item()
                 else:
                     total_loss += loss.item()
-                total_qhi_loss += loss[1].item() if isinstance(loss, tuple) else 0
-                total_qlo_loss += loss[2].item() if isinstance(loss, tuple) else 0
-        return total_loss / len(self.val_data_loader), total_qlo_loss / len(self.val_data_loader), total_qhi_loss / len(self.val_data_loader)
+                total_qlo_loss += loss[1].item() if isinstance(loss, tuple) else 0
+                total_qhi_loss += loss[2].item() if isinstance(loss, tuple) else 0
+        return (
+            total_loss / len(self.val_data_loader),
+            total_qlo_loss / len(self.val_data_loader),
+            total_qhi_loss / len(self.val_data_loader),
+        )

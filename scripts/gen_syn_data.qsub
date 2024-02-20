@@ -19,7 +19,7 @@ echo "Job name : $JOB_NAME"
 echo "Job ID : $JOB_ID  $SGE_TASK_ID"
 echo "=========================================================="
 
-#$ -t 1-14
+#$ -t 15
 
 # Specify number of cores 16: a whole node with at least 128gb ram
 #$ -pe omp 8
@@ -29,9 +29,11 @@ module load miniconda
 conda activate /projectnb/tianlabdl/jalido/sbrnet_proj/.direnv
 # speficy the directory to save data, the number of data pairs, and the sbr range
 python /projectnb/tianlabdl/jalido/sbrnet_proj/sbrnet_core/synthetic_data/main.py \
-    --out_dir "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/training_data/UQ/$SGE_TASK_ID/" \
+    --out_dir "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/training_data/UQ/vasc/$SGE_TASK_ID/" \
     --gt_path "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/training_data/gtbeads/" \
-    --lower_sbr 1.1 \
-    --upper_sbr 3 \
+    --lower_sbr 1.05 \
+    --upper_sbr 2.5 \
     --N 500 \
-    --view_ind $SGE_TASK_ID
+    --mode train \
+    --view_ind $SGE_TASK_ID \
+    --gt_name_pattern "sim_gt_vol"

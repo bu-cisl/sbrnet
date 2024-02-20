@@ -27,6 +27,7 @@ def process_single_iteration(i, PSF, config, scatlen):
         out_folder = config["out_dir"]
     view_combo_index = config["view_ind"] - 1
     view_list = view_combos[view_combo_index]
+    name_pattern = config["gt_name_pattern"]
 
     low_sbr = config["lower_sbr"]
     upper_sbr = config["upper_sbr"]
@@ -41,7 +42,7 @@ def process_single_iteration(i, PSF, config, scatlen):
     MLA_AP = full_read_tiff(mla_apodize_path)
 
     sbr = random.uniform(low_sbr, upper_sbr)
-    gt_path = os.path.join(gt_folder, f"sim_gt_vol_{i}.tif")
+    gt_path = os.path.join(gt_folder, f"{name_pattern}_{i}.tiff")
     gt = full_read_tiff(gt_path)
 
     value_path = os.path.join(value_folder, f"value_{i+1}.png")

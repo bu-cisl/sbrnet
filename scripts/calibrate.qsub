@@ -6,14 +6,15 @@
 # Specify hard time limit for the job. 
 #   The job will be aborted if it runs longer than this time.
 #   The default time is 12 hours
-#$ -l h_rt=48:00:00
+#$ -l h_rt=2:00:00
 
 # folder where the output of the qsub job is saved
 #$ -o /projectnb/tianlabdl/jalido/.log/.qlog
 
+#$ -N sbrnet_calibration
+
 # Combine output and error files into a single file
 #$ -j y
-
 
 # Keep track of information related to the current job
 echo "=========================================================="
@@ -23,17 +24,14 @@ echo "Job ID : $JOB_ID  $SGE_TASK_ID"
 echo "=========================================================="
 
 # Specify number of cores 16: a whole node with at least 128gb ram
-#$-pe omp 4
+#$-pe omp 8
 
 #Specify the number of GPUs (1 is recommended!)
 #$-l gpus=1
-#$-l gpu_c=7.0
+#$-l gpu_c=3.5
 
 # module load python3/3.8.10
 # source /projectnb2/tianlabdl/venvs/syn_vasc_env/bin/activate
 module load miniconda
 conda activate /projectnb/tianlabdl/jalido/sbrnet_proj/.direnv
-python /projectnb/tianlabdl/jalido/sbrnet_proj/sbrnet_core/sbrnet/main.py \
-  --dataset_pq "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/training_data/UQ/3/metadata.pq" \
-  --model_dir "/projectnb/tianlabdl/jalido/sbrnet_proj/trained_models/" \
-  --batch_size 16 \
+python /projectnb/tianlabdl/jalido/sbrnet_proj/sbrnet_core/sbrnet/calibration/firstdraft.py

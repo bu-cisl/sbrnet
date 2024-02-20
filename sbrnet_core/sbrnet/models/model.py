@@ -8,6 +8,10 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch.nn import Module, Conv2d, Sequential
 
+from sbrnet_core.sbrnet.models.model_parts import ResBlock, UNet, ResConnection
+
+# from torch.utils.checkpoint import checkpoint
+
 RSQRT2 = torch.sqrt(torch.tensor(0.5)).item()
 logger = logging.getLogger(__name__)
 
@@ -18,17 +22,23 @@ class SimpleLayer(nn.Module):
         self.layer = nn.Sequential(
             *[
                 nn.Conv2d(
-                    config.get("num_gt_layers") * 2,
-                    config.get("num_gt_layers") * 2,
+                    config.get("num_gt_layers")
+                    * config.get("resnext_cardinality", 32)
+                    * 2,
+                    config.get("num_gt_layers")
+                    * config.get("resnext_cardinality", 32)
+                    * 2,
                     kernel_size=3,
                     padding=1,
                 )
                 if _ < config.get("num_head_layers") - 1
                 else nn.Conv2d(
-                    config.get("num_gt_layers") * 2,
+                    config.get("num_gt_layers")
+                    * config.get("resnext_cardinality", 32)
+                    * 2,
                     config.get("num_gt_layers"),
-                    kernel_size=3,
-                    padding=1,
+                    kernel_size=1,
+                    padding=0,
                 )
                 for _ in range(config.get("num_head_layers"))
             ]
@@ -46,117 +56,30 @@ class QuantileLayer(nn.Module):
 
         self.lower = nn.Sequential(
             *[
-                nn.Sequential(
-                    nn.Conv2d(
-                        config.get("num_gt_layers") * 2,
-                        config.get("num_gt_layers") * 2,
-                        kernel_size=3,
-                        padding=1,
-                    ),
-                    nn.ReLU(),
-                )
-
+                ResBlock(n_channels_middle)
                 for _ in range(config.get("num_head_layers") - 1)
             ],
-            nn.Conv2d(
-                config.get("num_gt_layers") * 2,
-                config.get("num_gt_layers"),
-                kernel_size=3,
-                padding=1,
-            ),
+            nn.Conv2d(n_channels_middle, n_channels_out, kernel_size=3, padding=1),
         )
+
         self.prediction = nn.Sequential(
             *[
-                nn.Sequential(
-                    nn.Conv2d(
-                        config.get("num_gt_layers") * 2,
-                        config.get("num_gt_layers") * 2,
-                        kernel_size=3,
-                        padding=1,
-                    ),
-                    nn.ReLU(),
-                )
-
+                ResBlock(n_channels_middle)
                 for _ in range(config.get("num_head_layers") - 1)
             ],
-            nn.Conv2d(
-                config.get("num_gt_layers") * 2,
-                config.get("num_gt_layers"),
-                kernel_size=3,
-                padding=1,
-            ),
+            nn.Conv2d(n_channels_middle, n_channels_out, kernel_size=3, padding=1),
         )
+
         self.upper = nn.Sequential(
             *[
-                nn.Sequential(
-                    nn.Conv2d(
-                        config.get("num_gt_layers") * 2,
-                        config.get("num_gt_layers") * 2,
-                        kernel_size=3,
-                        padding=1,
-                    ),
-                    nn.ReLU(),
-                )
-
+                ResBlock(n_channels_middle)
                 for _ in range(config.get("num_head_layers") - 1)
             ],
-            nn.Conv2d(
-                config.get("num_gt_layers") * 2,
-                config.get("num_gt_layers"),
-                kernel_size=3,
-                padding=1,
-            ),
+            nn.Conv2d(n_channels_middle, n_channels_out, kernel_size=3, padding=1),
         )
 
     def forward(self, x):
-        return torch.cat([self.lower(x), self.prediction(x), self.upper(x)], dim=1)
-
-
-# class QuantileLayer(nn.Module):
-#     def __init__(self, config):
-#         super(QuantileLayer, self).__init__()
-#         # expand from the trunk to 3 heads, each head with (num_gt_layers * 2) channels
-#         self.expansion = nn.Conv2d(
-#             config.get("num_gt_layers") * 2,
-#             config.get("num_gt_layers") * 2 * 3,
-#             kernel_size=3,
-#             padding=1,
-#         )
-
-#         #each head has their own group of conv kernels with groups=3
-#         self.multihead = nn.Sequential(
-#             *[
-#                 nn.Sequential(
-#                     nn.Conv2d(
-#                         config.get("num_gt_layers") * 2 * 3,
-#                         config.get("num_gt_layers") * 2 * 3,
-#                         kernel_size=3,
-#                         padding=1,
-#                         groups=3,
-#                     ),
-#                     nn.ReLU(),
-#                 )
-#                 # minimum 2 layers for expansion and contraction.
-#                 # any more would be here in the middle.
-#                 for _ in range(config.get("num_head_layers") - 2)
-#             ]
-#         )
-#         # single conv layer to shrink each head's (num_gt_layers * 2) channels
-#         # to (num_gt_layers) for the final reconstruction
-#         self.contraction = nn.Conv2d(
-#             config.get("num_gt_layers") * 2 * 3,
-#             config.get("num_gt_layers") * 3,
-#             kernel_size=3,
-#             padding=1,
-#             groups=3,
-#         )
-
-#     def forward(self, x):
-#         x = self.expansion(x)
-#         x = self.multihead(x)
-#         # x = (self.multihead(x) + x) * RSQRT2
-#         x = self.contraction(x)
-#         return x
+        return torch.cat([self.lower(x), self.upper(x), self.prediction(x)], dim=1)
 
 
 class LastLayer(nn.Module):
@@ -176,9 +99,6 @@ class LastLayer(nn.Module):
         return self.layer(x)
 
 
-# class SBRNet(Sequential):
-#     def __init__(self, config):
-#         super(SBRNet, self).__init__(SBRNetTrunk(config), LastLayer(config))
 class SBRNet(nn.Module):
     def __init__(self, config: dict):
         super(SBRNet, self).__init__()
@@ -195,15 +115,14 @@ class SBRNetTrunk(Module):
         super().__init__()
         self.config = config
 
-        # UNet backbone is deprecated
         if config["backbone"] == "resnet":
             self.view_synthesis_branch = ResNetCM2NetBlock(config, "view_synthesis")
 
             self.rfv_branch = ResNetCM2NetBlock(config, "refinement")
-        else:
-            raise ValueError(
-                f"Unknown backbone: {config['backbone']}. Only 'resnet' is supported."
-            )
+        elif config["backbone"] == "unet":
+            self.view_synthesis_branch = UNetCM2NetBlock(config, "view_synthesis")
+
+            self.rfv_branch = UNetCM2NetBlock(config, "refinement")
 
         self.init_convs()
 
@@ -230,40 +149,28 @@ class SBRNetTrunk(Module):
         ) * RSQRT2
 
 
-class ResConnection(Sequential):
-    def forward(self, data: Tensor, scale: float = RSQRT2) -> Tensor:
-        return (super().forward(data) + data) * scale
+class UNetCM2NetBlock(Module):
+    def __init__(self, config, branch: str) -> None:
+        super().__init__()
+        df = read_parquet(config["dataset_pq"])
+        if branch == "view_synthesis":
+            inchannels = df.iloc[0].num_views
+        elif branch == "refinement":
+            inchannels = config["num_rfv_layers"]
+        else:
+            raise ValueError(
+                f"Unknown branch: {branch}. Only 'view_synthesis' and 'refinement' are supported."
+            )
+        self.model = UNet(inchannels, config["num_gt_layers"] * 2)
 
-
-# # ResNet backbone by mitch
-# class ResBlock(Sequential):
-#     def __init__(self, channels: int) -> None:
-#         super(ResBlock, self).__init__(
-#             nn.BatchNorm2d(channels),
-#             ResConnection(
-#                 nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False),
-#                 nn.ReLU(True),
-#                 nn.BatchNorm2d(channels),
-#                 nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False),
-#             ),
-#         )
-
-
-# og resnet backbone
-class ResBlock(ResConnection):
-    def __init__(self, channels: int) -> None:
-        super(ResBlock, self).__init__(
-            nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(channels),
-            nn.ReLU(True),
-            nn.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(channels),
-        )
+    def forward(self, x):
+        return self.model(x)
 
 
 class ResNetCM2NetBlock(Sequential):
     def __init__(self, config, branch: str) -> None:
         df = read_parquet(config["dataset_pq"])
+        cardinality = config.get("resnext_cardinality", 32)
 
         if branch == "view_synthesis":
             inchannels = df.iloc[0].num_views
@@ -276,18 +183,17 @@ class ResNetCM2NetBlock(Sequential):
 
         numblocks = config["num_resblocks"]
         outchannels = config["num_gt_layers"]
-        # # mitchell's idea.
+        # mitchell's idea. take away long skip connection
         # super(ResNetCM2NetBlock, self).__init__(
         #     nn.Conv2d(inchannels, outchannels * 2, kernel_size=3, padding=1),
         #     *(ResBlock(channels=outchannels * 2) for _ in range(numblocks)),
         # )
 
-        # # og
+        # og
         super(ResNetCM2NetBlock, self).__init__(
-            nn.Conv2d(inchannels, outchannels * 2, kernel_size=3, padding=1),
+            nn.Conv2d(inchannels, outchannels * 2, kernel_size=3, padding=1, bias=True),
             ResConnection(
                 *(ResBlock(channels=outchannels * 2) for _ in range(numblocks))
-                # nn.Conv2d(outchannels * 2, outchannels * 2, kernel_size=3, padding=1),
             ),
         )
 
@@ -295,11 +201,11 @@ class ResNetCM2NetBlock(Sequential):
 # debugging
 if __name__ == "__main__":
     config = {
-        "backbone": "resnet",
+        "backbone": "unet",
         "num_gt_layers": 24,
         "num_rfv_layers": 24,
-        "num_resblocks": 2,
-        "num_head_layers": 2,
+        "num_resblocks": 17,
+        "num_head_layers": 1,
         "weight_init": "kaiming_normal",
         "last_layer": "quantile_heads",
         "dataset_pq": "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/training_data/UQ/15/metadata.pq",
@@ -307,7 +213,11 @@ if __name__ == "__main__":
     stack = torch.randn(1, 9, 32, 32)
     rfv = torch.randn(1, 24, 32, 32)
     model = SBRNet(config)
-    out = model(stack, rfv)
+    model.eval()
+    print("Number of parameters:", sum(p.numel() for p in model.parameters()))
+    with torch.no_grad():
+        out = model(stack, rfv)
+
     print(out.shape)
 
     slice_q_lo = slice(0, config["num_gt_layers"])
@@ -317,7 +227,7 @@ if __name__ == "__main__":
     from sbrnet_core.sbrnet.losses.quantile_loss import PinballLoss
 
     q_lo_loss = PinballLoss(quantile=0.10, reduction="mean")
-    print("SKice", slice_q_lo)
+    print("Slice", slice_q_lo)
     print(out[:, slice_q_lo, :, :].shape, rfv.shape)
     a = q_lo_loss(out[:, slice_q_lo, :, :], rfv)
     print(a)
