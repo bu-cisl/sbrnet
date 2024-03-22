@@ -26,9 +26,9 @@ echo "=========================================================="
 
 
 module load miniconda
-conda activate /projectnb/tianlabdl/jalido/sbrnet_proj/.direnv
+source /projectnb/tianlabdl/rjbona/sbrnet/.direnv/bin/activate
 # speficy the directory to save data, the number of data pairs, and the sbr range
-python /projectnb/tianlabdl/jalido/sbrnet_proj/sbrnet_core/synthetic_data/main.py \
+python /projectnb/tianlabdl/rjbona/sbrnet/sbrnet_core/sbrnet/synthetic_data/main.py \
     --out_dir "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/training_data/UQ/vasc/$SGE_TASK_ID/" \
     --gt_path "/ad/eng/research/eng_research_cisl/jalido/sbrnet/data/training_data/gtbeads/" \
     --lower_sbr 1.05 \

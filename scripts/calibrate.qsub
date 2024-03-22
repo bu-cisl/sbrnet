@@ -33,5 +33,6 @@ echo "=========================================================="
 # module load python3/3.8.10
 # source /projectnb2/tianlabdl/venvs/syn_vasc_env/bin/activate
 module load miniconda
-conda activate /projectnb/tianlabdl/jalido/sbrnet_proj/.direnv
-python /projectnb/tianlabdl/jalido/sbrnet_proj/sbrnet_core/sbrnet/calibration/firstdraft.py
+#conda activate /projectnb/tianlabdl/jalido/sbrnet_proj/.direnv
+source /projectnb/tianlabdl/rjbona/sbrnet/.direnv/bin/activate
+python /projectnb/tianlabdl/rjbona/sbrnet/sbrnet_core/sbrnet/calibration/firstdraft.py

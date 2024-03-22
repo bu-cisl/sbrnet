@@ -58,7 +58,7 @@ class QuantileLoss(nn.Module):
                 f"Unknown loss criterion: {params['criterion_name']}. Using BCEWithLogitsLoss."
             )
 
-        self.slice_q_lo = slice(0, params["num_gt_layers"])
+        self.slice_q_lo = slice(0, params["num_gt_layers"]) #add bce weight here
         self.slice_q_hi = slice(params["num_gt_layers"], params["num_gt_layers"] * 2)
         self.slice_point = slice(params["num_gt_layers"] * 2, None)
 
@@ -79,6 +79,7 @@ class QuantileLoss(nn.Module):
         qlo_loss = self.qlo_weight * self.q_lo_loss(
             self.output_activation(pred[:, self.slice_q_lo, :, :]), target
         )
+        #add another loss function to help, bce
         point_pred_loss = self.point_weight * self.point_loss(
             pred[:, self.slice_point, :, :], target
         )
