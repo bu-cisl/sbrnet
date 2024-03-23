@@ -6,7 +6,7 @@
 # Specify hard time limit for the job. 
 #   The job will be aborted if it runs longer than this time.
 #   The default time is 12 hours
-#$ -l h_rt=1:00:00
+#$ -l h_rt=12:00:00
 
 # folder where the output of the qsub job is saved
 #$ -o /projectnb/tianlabdl/rjbona/.log/.qlog
