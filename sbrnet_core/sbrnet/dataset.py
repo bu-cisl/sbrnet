@@ -13,7 +13,7 @@ from torch.utils.data import Dataset
 class CustomDataset(Dataset):
     def __init__(self, config: dict):
         super(CustomDataset, self).__init__()
-        self.df = read_parquet(config["dataset_pq"]).iloc[0]
+        self.df = read_parquet(config["dataset_pq"])
         self.scattering = config["scattering"]
 
     def __len__(self):
