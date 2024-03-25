@@ -43,6 +43,8 @@ class QuantileLoss(nn.Module):
         self.q_hi_loss = PinballLoss(quantile=params["q_hi"])
         self.point_weight = params["point_loss_weight"]
         self.qlo_weight = params["qlo_weight"]
+        self.qlo_pinball_weight = params["qlo_pinball_weight"]
+        self.qlo_bce_weight = params["qlo_bce_weight"] 
         self.qhi_weight = params["qhi_weight"]
         self.output_activation_name = params["output_activation"]
 
@@ -58,9 +60,11 @@ class QuantileLoss(nn.Module):
                 f"Unknown loss criterion: {params['criterion_name']}. Using BCEWithLogitsLoss."
             )
 
-        self.slice_q_lo = slice(0, params["num_gt_layers"]) #add bce weight here
-        self.slice_q_hi = slice(params["num_gt_layers"], params["num_gt_layers"] * 2)
-        self.slice_point = slice(params["num_gt_layers"] * 2, None)
+        #self.slice_q_lo = slice(0, params["num_gt_layers"]) #add bce weight here
+        self.slice_q_lo_pinball = slice(0, params["num_gt_layers"])  #slice for qlo pinball
+        self.slice_q_lo_bce = slice(params["num_gt_layers"], params["num_gt_layers"] * 2) #slice for qlo bce
+        self.slice_q_hi = slice(params["num_gt_layers"]*2, params["num_gt_layers"] * 3)
+        self.slice_point = slice(params["num_gt_layers"] * 3, None)
 
     def output_activation(self, x):
         if self.output_activation_name == "sigmoid":
@@ -76,10 +80,19 @@ class QuantileLoss(nn.Module):
             return torch.sigmoid(x)
 
     def forward(self, pred, target):
+        '''
         qlo_loss = self.qlo_weight * self.q_lo_loss(
             self.output_activation(pred[:, self.slice_q_lo, :, :]), target
         )
-        #add another loss function to help, bce
+        '''
+        qlo_pinball_loss = self.qlo_pinball_weight * self.q_lo_loss(
+            self.output_activation(pred[:, self.slice_q_lo_pinball, :, :]), target
+        )
+        qlo_bce_loss = self.qlo_bce_weight * self.point_loss(
+            pred[:, self.slice_q_lo_bce, :, :], target
+        )
+        qlo_loss = self.qlo_weight * (qlo_pinball_loss + qlo_bce_loss)
+        
         point_pred_loss = self.point_weight * self.point_loss(
             pred[:, self.slice_point, :, :], target
         )

@@ -12,7 +12,7 @@ from sbrnet_core.sbrnet.trainer import Trainer
 current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
 # Define the log file path with the timestamp
-log_file_path = f"/projectnb/tianlabdl/jalido/sbrnet_proj/.log/logging/sbrnet_train_{current_time}.log"
+log_file_path = f"/projectnb/tianlabdl/rjbona/.log/logging/sbrnet_train_{current_time}.log"
 
 # Configure logging to write log messages to the file
 logging.basicConfig(filename=log_file_path, level=logging.INFO)
